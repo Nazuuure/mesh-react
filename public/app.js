@@ -1,5 +1,6 @@
 import {categories,place,product,freeStock,space,source} from '/model.mjs'
 const $=s=>document.querySelector(s),root=$('#main')
+let query=''
 let state,role='buyer',destination='p2',office='p1',heatCat='Электроника',heatCity='Йошкар-Ола',filter='Все',transferProduct=1,selected=new Set(),busy=false,timer
 const esc=v=>String(v??'').replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]))
 const num=n=>Number(n).toLocaleString('ru-RU',{maximumFractionDigits:2}),rub=n=>num(n)+' ₽'
@@ -29,13 +30,15 @@ function orderRow(o,atOffice=false){
 }
 function buyer(){
  const orders=state.orders.slice().reverse()
- return hero('Товары рядом','Выберите пункт выдачи, чтобы увидеть доступность и срок доставки.',label('Мой пункт выдачи',`<select id="destination">${points(offices(),destination)}</select>`))+
+ const matches=state.products.filter(p=>(filter==='Все'||p.category===filter)&&(p.name+' '+p.category).toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')))
+ const routeArt='<div class="route-art" aria-hidden="true"><i></i><b></b><span></span></div>'
+ return hero('Товары рядом','Выберите пункт выдачи, чтобы увидеть доступность и срок доставки.',routeArt+label('Мой пункт выдачи',`<select id="destination">${points(offices(),destination)}</select>`))+
  (orders.length?panel('Мои заказы',orders.map(o=>orderRow(o)).join('')):'')+
  `<div class="head"><h2>Каталог</h2>${chips(['Все',...categories],filter,'filter')}</div><div class="grid">`+
- state.products.filter(p=>filter==='Все'||p.category===filter).map(p=>{
+ matches.map(p=>{
  const src=source(state,p,destination),near=src&&src.id!=='hub'&&src.city===place(state,destination).city&&Math.hypot(src.x-place(state,destination).x,src.y-place(state,destination).y)<=4
  const hint=!src?'Нет в наличии':near?'Товар рядом · '+name(src.id):src.city===place(state,destination).city&&src.id!=='hub'?'По городу · ориентир 2 часа':'Через хаб · ориентир 1–2 дня'
- return `<article class="card"><div class="art" style="--tint:${['#e3d8f6','#efdfcd','#d8e6e3','#f6e5ae','#dfe8f3','#eadbe0'][p.id%6]}"><span aria-hidden="true">${esc(p.icon)}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div><button class="primary" data-action="order" data-product="${p.id}" ${src?'':'disabled'}>Заказать</button><small>${hint}</small></article>`}).join('')+'</div>'
+ return `<article class="card"><div class="art tile-${p.id>=1&&p.id<=6?p.id:'new'}"><span aria-hidden="true">${p.id>6?'📦':''}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div><button class="primary" data-action="order" data-product="${p.id}" ${src?'':'disabled'}>Заказать</button><small>${hint}</small></article>`}).join('')+(matches.length?'':none('Товары не найдены. Измените запрос или категорию.'))+'</div>'
 }
 function stockLines(where){
  return state.products.filter(p=>Object.entries(p.stock).some(([id,n])=>n>0&&(!where||where===id))).map(p=>`<div class="entry"><b>${esc(p.name)}</b> <span class="muted">· ${p.dims.map(num).join(' × ')} см · ${num(p.liters)} л</span><br>${Object.entries(p.stock).filter(([id,n])=>n>0&&(!where||where===id)).map(([id,n])=>`${loc(id)}: ${freeStock(state,p,id)} свободно из ${n}`).join(' · ')}</div>`).join('')||none('Полка пока пуста')
@@ -82,7 +85,9 @@ function wb(){
  panel('Все заявки',state.requests.slice().reverse().map(reqRow).join('')||none('История пуста'))+
  `<details class="panel"><summary>Управление демонстрацией</summary><p>День ${state.day}. Перевод времени добавляет день хранения и ожидания.</p><div class="actions">${button('Следующий день','day')}${button('Восстановить демоданные','reset')}</div></details>`
 }
-function render(){root.innerHTML=({buyer,seller,wb,pvz}[role])();$('#clock').textContent='День '+state.day}
+$('#lookup').onsubmit=e=>{e.preventDefault();query=$('#query').value.trim();filter='Все';role='buyer';$('#role').value=role;if(state)render()}
+$('#query').oninput=e=>{if(role==='buyer'&&state){query=e.target.value.trim();render()}}
+function render(){document.body.dataset.role=role;root.innerHTML=({buyer,seller,wb,pvz}[role])();$('#clock').textContent='День '+state.day}
 async function refresh(){const r=await fetch('/api/state');if(!r.ok)throw Error('Сервер недоступен');const s=await r.json();if(!state||s.version!==state.version){state=s;render()}}
 async function post(a){
  if(busy)return;busy=true

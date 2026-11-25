@@ -19,7 +19,7 @@ if(process.env.DATABASE_URL){
   save=s=>db.prepare('UPDATE demo SET body=? WHERE id=1').run(JSON.stringify(s));close=()=>db.close()
 }
 let queue=Promise.resolve()
-const files={'/':['index.html','text/html'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
+const files={'/catalog.jpg':['catalog.jpg','image/jpeg'],'/':['index.html','text/html'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
 const server=http.createServer(async(req,res)=>{
  const send=(status,value,type='application/json')=>{res.writeHead(status,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store'});res.end(type==='application/json'?JSON.stringify(value):value)}
  try{
