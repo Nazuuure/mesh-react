@@ -73,7 +73,7 @@ function wb(){
  const freed=id=>!state.trips.some(t=>t.robot===id&&!['Завершён','Сбой'].includes(t.status))
  const forms=Object.entries(groups).map(([key,list])=>{
  const isHub=key.startsWith('hub-'),city=place(state,list[0].to).city
- return `<form class="entry" data-form="${isHub?'offer':'trip'}"><h3>${isHub?'Поставка в '+city:'Рейс из '+loc(list[0].from)}</h3>${list.map(r=>`<label class="check"><input name="ids" type="checkbox" value="${r.id}" ${selected.has(r.id)?'checked':''}>№${r.id} · ${esc(product(state,r.product).name)} × ${r.qty} → ${name(r.to)} · ${num(r.qty*product(state,r.product).liters)} л</label>`).join('')}<div class="form">${isHub?field('place','Пункт приёмки',opts([['','Подобрать по вместимости'],...offices().filter(q=>q.city===city).map(q=>[q.id,q.name+' · свободно '+num(space(state,q.id).free)+' л'])])):field('robot','Свободный робот',opts(['R-01','R-02'].filter(freed).map(t=>[t,t])))}${submit(isHub?'Запросить приёмку':'Построить маршрут и начать погрузку')}</div></form>`
+ return `<form class="entry" data-form="${isHub?'offer':'trip'}"><h3>${isHub?'Поставка в '+city:'Рейс из '+loc(list[0].from)}</h3>${list.map(r=>`<label class="check"><input name="ids" type="checkbox" value="${r.id}" ${selected.has(r.id)?'checked':''}>№${r.id} · ${esc(product(state,r.product).name)} × ${r.qty} → ${name(r.to)} · ${num(r.qty*product(state,r.product).liters)} л</label>`).join('')}<div class="form">${isHub?field('place','Пункт приёмки',opts([['','Подобрать по вместимости'],...offices().filter(q=>q.city===city).map(q=>[q.id,q.name+' · свободно '+num(space(state,q.id).free)+' л'])])):field('robot','Свободный робот',opts(['R-01','R-02'].filter(freed).map(t=>[t,t])))}${submit(isHub?'Запросить приёмку':'Построить маршрут и начать погрузку')}${isHub?'':'<button name="fallback">Отправить через хаб</button>'}</div><p class="muted tiny" data-quote></p></form>`
  }).join('')
  return hero('Диспетчерская WB','Сгруппируйте заявки одного города или соберите рейс робота.')+
  panel('Очередь заявок',forms||none('Новых заявок нет. Создайте перемещение в кабинете продавца или оформите заказ.'))+
@@ -90,7 +90,7 @@ async function post(a){
  catch(e){notify(e.message);await refresh().catch(()=>{})}finally{busy=false}
 }
 $('#role').onchange=e=>{role=e.target.value;selected.clear();render();refresh().catch(e=>notify(e.message))}
-root.onchange=e=>{const el=e.target;if(el.name==='ids'){if(el.checked)selected.add(+el.value);else selected.delete(+el.value);return}
+root.onchange=e=>{const el=e.target;if(el.name==='ids'){if(el.checked)selected.add(+el.value);else selected.delete(+el.value);const rows=state.requests.filter(r=>[...el.form.querySelectorAll('input:checked')].some(i=>+i.value===r.id));const units=rows.reduce((n,r)=>n+r.qty,0);const quote=el.form.querySelector('[data-quote]');if(quote)quote.textContent=units?'Выбрано '+units+' шт. · '+num(rows.reduce((n,r)=>n+r.qty*product(state,r.product).liters,0))+' л'+(el.form.dataset.form==='trip'?' · рейс '+rub(360/units)+'/шт. · хаб 80 ₽/шт.':''):'';return}
  switch(el.id){case 'office':office=el.value;break;case 'destination':destination=el.value;break;case 'transferProduct':transferProduct=+el.value;break;case 'heatCat':heatCat=el.value;break;case 'heatCity':heatCity=el.value;break;default:return}render()}
 root.onclick=e=>{const b=e.target.closest('button[data-action]');if(!b)return;const {action,...args}=b.dataset;if(action==='filter'){filter=args.value;render();return}
  if(action==='reset'&&!confirm('Заменить текущие заказы и остатки демонстрационными данными?'))return
@@ -102,7 +102,7 @@ root.onsubmit=e=>{e.preventDefault();const f=e.target,d=new FormData(f),a=Object
  if(a.type==='product')a.dims=[a.l,a.w,a.h]
  if(a.type==='capacity')a.place=office
  if(['offer','trip'].includes(a.type)){a.ids=d.getAll('ids').map(Number);if(!a.ids.length){notify('Отметьте заявки для отправки');return}}
- post(a)}
+ if(e.submitter?.name==='fallback')a.type='viaHub';post(a)}
 refresh().catch(e=>notify(e.message))
 window.addEventListener('focus',()=>refresh().catch(e=>notify(e.message)))
 setInterval(()=>{if(!busy&&!document.hidden&&!root.contains(document.activeElement))refresh().catch(()=>{})},3500)

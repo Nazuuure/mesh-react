@@ -89,7 +89,8 @@ export function apply(s,a){
    break
  }
  case 'choice':check(o?.status==='Предложение','Предложение уже обработано');if(a.accept===true)o.status='Готов к выдаче';else{o.status='Доставка';request(s,product(s,o.product),1,o.loc,o.to,o.id)}break
- case 'offer':check(rows.length&&rows.every(r=>r.kind==='Магистраль'&&['Новая','Ожидает места'].includes(r.status)&&place(s,r.to).city===place(s,rows[0].to).city),'Выберите новые заявки в один город');suggest(s,rows,a.place);break
+ case 'viaHub':check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'),'Выберите новые городские заявки');for(const r of rows)r.kind='Магистраль';break
+ case 'offer':check(rows.length&&rows.every(r=>r.kind==='Магистраль'&&['Новая','Ожидает места'].includes(r.status)&&place(s,r.to).city===place(s,rows[0].to).city),'Выберите новые заявки в один город');for(const r of rows)if(r.status==='Ожидает места')r.tried=[];suggest(s,rows,a.place);break
  case 'reply':{
    const group=s.requests.filter(r=>r.batch===Number(a.batch)&&r.status==='Согласование'&&r.target===a.place)
    check(group.length,'Заявка уже обработана')
