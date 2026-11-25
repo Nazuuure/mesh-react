@@ -1,4 +1,3 @@
-import {networkInterfaces} from 'node:os'
 import http from 'node:http'
 import {readFile} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url'
@@ -31,13 +30,16 @@ function tick(s){
 }
 const respond=s=>({...s,serverNow:Date.now()})
 let queue=Promise.resolve()
-const files={'/catalog.jpg':['catalog.jpg','image/jpeg'],'/':['index.html','text/html'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
-const start=(role,port)=>{const server=http.createServer(async(req,res)=>{
+const files={'/catalog.jpg':['catalog.jpg','image/jpeg'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
+const server=http.createServer(async(req,res)=>{
  const send=(status,value,type='application/json')=>{res.writeHead(status,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store'});res.end(type==='application/json'?JSON.stringify(value):value)}
  try{
   if(req.method==='GET'&&req.url==='/api/state')return send(200,respond(tick(await load())))
   if(req.method==='GET'&&req.url==='/health')return send(200,{ok:true})
-  if(req.method==='POST'&&req.url==='/api/actions'){
+  const [,role,...parts]=new URL(req.url,'http://localhost').pathname.split('/')
+  const knownRole=Object.hasOwn(roles,role)
+  const route=parts.join('/')
+  if(req.method==='POST'&&knownRole&&route==='api/actions'){
     if(req.headers['content-type']?.split(';')[0]!=='application/json')return send(415,{error:'Нужен JSON'})
     let body='';for await(const chunk of req){body+=chunk;if(body.length>32000)return send(413,{error:'Слишком большой запрос'})}
     const action=JSON.parse(body)
@@ -47,20 +49,16 @@ const start=(role,port)=>{const server=http.createServer(async(req,res)=>{
       s.version=v+1;await save(s);return s})
     queue=result.catch(()=>{});return send(200,respond(await result))
   }
-  if(req.method==='GET'&&req.url==='/'){
-    const html=await readFile(new URL('./public/index.html',import.meta.url),'utf8')
-    return send(200,html.replaceAll('ROLE_KEY',role).replaceAll('ROLE_NAME',names[role]),'text/html')
+  if(req.method==='GET'&&req.url==='/'){res.writeHead(302,{Location:'/buyer/'});return res.end()}
+  if(req.method==='GET'&&knownRole&&(route===''||route==='index.html')){
+    return send(200,await readFile(new URL('./public/'+role+'/index.html',import.meta.url)),'text/html')
   }
   if(req.method==='GET'&&Object.hasOwn(files,req.url)){const [name,type]=files[req.url];return send(200,await readFile(fileURLToPath(new URL('./public/'+name,import.meta.url))),type)}
   send(404,{error:'Адрес не найден'})
  }catch(e){send(400,{error:e.message})}
 })
-server.on('error',e=>{console.error('Порт '+port+': '+e.message);process.exit(1)})
-server.listen(port,process.env.HOST||'0.0.0.0',()=>{
- const urls=['127.0.0.1',...Object.values(networkInterfaces()).flat().filter(i=>i.family==='IPv4'&&!i.internal).map(i=>i.address)]
- console.log(names[role]+'  '+urls.map(ip=>'http://'+ip+':'+port).join('   '))
+server.on('error',e=>{console.error('Порт '+base+': '+e.message);process.exit(1)})
+server.listen(base,process.env.HOST||'127.0.0.1',()=>{
+ for(const [role,title] of Object.entries(names))console.log(title+'  http://localhost:'+base+'/'+role+'/')
 })
-return server
-}
-const servers=Object.keys(roles).map((role,i)=>start(role,base+i))
-process.on('SIGTERM',async()=>{await Promise.all(servers.map(server=>new Promise(resolve=>server.close(resolve))));await close()})
+process.on('SIGTERM',()=>server.close(close))

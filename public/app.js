@@ -106,8 +106,8 @@ function wb(){
  panel('Все заявки',state.requests.slice().reverse().map(reqRow).join('')||none('История пуста'))+
  `<details class="panel"><summary>Управление демонстрацией</summary><p>День ${state.day}. Перевод времени добавляет день хранения и ожидания.</p><div class="actions">${button('Следующий день','day')}${button('Восстановить демоданные','reset')}</div></details>`
 }
-$('#lookup').onsubmit=e=>{e.preventDefault();query=$('#query').value.trim();filter='Все';if(state)render()}
-$('#query').oninput=e=>{if(role==='buyer'&&state){query=e.target.value.trim();render()}}
+if(role==='buyer')$('#lookup').onsubmit=e=>{e.preventDefault();query=$('#query').value.trim();filter='Все';if(state)render()}
+if(role==='buyer')$('#query').oninput=e=>{if(role==='buyer'&&state){query=e.target.value.trim();render()}}
 function render(){document.body.dataset.role=role;root.innerHTML=({buyer,seller,wb,pvz}[role])();$('#clock').textContent='День '+state.day;updateTimers()}
 async function refresh(){const r=await fetch('/api/state');if(!r.ok)throw Error('Сервер недоступен');const s=await r.json();skew=s.serverNow-Date.now()
  if(state&&s.version<state.version)return
@@ -119,7 +119,7 @@ async function refresh(){const r=await fetch('/api/state');if(!r.ok)throw Error(
  }}
 async function post(a){
  if(busy)return;busy=true
- try{const r=await fetch('/api/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...a,version:state.version})});const result=await r.json();if(!r.ok)throw Error(result.error);skew=result.serverNow-Date.now();state=result;selected.clear();render();notify('Готово')}
+ try{const r=await fetch('/'+role+'/api/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...a,version:state.version})});const result=await r.json();if(!r.ok)throw Error(result.error);skew=result.serverNow-Date.now();state=result;selected.clear();render();notify('Готово')}
  catch(e){notify(e.message);await refresh().catch(()=>{})}finally{busy=false}
 }
 root.oninput=e=>{
