@@ -31,6 +31,7 @@ function tick(s){
 const respond=s=>({...s,serverNow:Date.now()})
 let queue=Promise.resolve()
 const files={'/catalog.jpg':['catalog.jpg','image/jpeg'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
+for (const role of Object.keys(roles)) files['/'+role+'/app.js']=[role+'/app.js','application/javascript']
 const server=http.createServer(async(req,res)=>{
  const send=(status,value,type='application/json')=>{res.writeHead(status,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store'});res.end(type==='application/json'?JSON.stringify(value):value)}
  try{
