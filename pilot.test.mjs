@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compareRoutes, profitBoundary } from './economics.mjs';
-import { apply, demandAt, freeStock, localKm, product, scheduleRovers, seed, space, syncGeography } from './model.mjs';
+import { apply, demandAt, freeStock, localKm, product, scheduleDispatch, scheduleRovers, seed, space, syncGeography } from './model.mjs';
 
 const scenario = {
     units: 8, unitLiters: 1, liters: 8, meshDays: 7, hubDays: 7,
@@ -309,7 +309,7 @@ test('Partial receipt credits only counted packages and leaves the rest in trans
  const r=s.requests[0]
  apply(s,{type:'trip',ids:[r.id],robot:'R-01'})
  apply(s,{type:'ship',request:r.id,place:'p1'},1000)
- apply(s,{type:'receive',request:r.id,place:'p2',received:1},r.eta)
+ apply(s,{type:'receive',request:r.id,place:'p2',eventId:'scan-1',received:1},r.eta)
  assert.equal(p.stock.p2,1)
  assert.equal(r.status,'В пути')
  assert.equal(r.qty,2)
@@ -319,7 +319,7 @@ test('Partial receipt credits only counted packages and leaves the rest in trans
 })
 
 test('Dispatch sends a timed-out singleton to the hub flow but waits for physical handover',async()=>{
-    const {scheduleDispatch}=await import('./model.mjs')
+
     const s=seed()
     apply(s,{type:'transfer',product:2,place:'p2',to:'p1',qty:1},1000)
     const r=s.requests[0]
@@ -327,9 +327,73 @@ test('Dispatch sends a timed-out singleton to the hub flow but waits for physica
     assert.equal(r.status,'Новая')
     scheduleDispatch(s,61000)
     assert.equal(r.kind,'Магистраль')
-    assert.equal(r.status,'Согласование')
-    apply(s,{type:'reply',place:r.target,batch:r.batch,accept:true})
+    assert.equal(r.status,'Погрузка')
+    assert.equal(r.target,'hub')
     scheduleDispatch(s,70000)
     assert.equal(r.status,'Погрузка')
     assert.equal(r.departed,false)
+})
+
+test('Aged stock fills local demand and returns the excess to the hub exactly once',()=>{
+ const s=seed()
+ const item=product(s,2)
+ s.products=[item]
+ s.day=30
+ s.orders=Array.from({length:5},(_,i)=>({id:100+i,created:29,product:item.id,to:'p1',loc:'p1',status:'Выдан'}))
+ scheduleDispatch(s,1000)
+ const rows=s.requests.map(r=>[r.from,r.to,r.qty])
+ assert.deepEqual(rows,[['p2','p1',5],['p2','hub',7]])
+ scheduleDispatch(s,1001)
+ assert.equal(s.requests.length,2)
+ const back=s.requests.find(r=>r.to==='hub')
+ apply(s,{type:'ship',request:back.id,place:'p2'},2000)
+ apply(s,{type:'receive',request:back.id,place:'hub'},back.eta)
+ assert.equal(item.stock.hub,7)
+ assert.equal(item.stock.p2,5)
+})
+
+test('Small batch is scanned at the hub before the second leg can depart',()=>{
+ const s=seed()
+ apply(s,{type:'transfer',product:2,place:'p2',to:'p1',qty:5},0)
+ scheduleDispatch(s,60000)
+ const first=s.requests[0]
+ assert.equal(first.target,'hub')
+ assert.equal(s.requests.length,1)
+ apply(s,{type:'ship',request:first.id,place:'p2'},61000)
+ apply(s,{type:'receive',request:first.id,place:'hub'},first.eta)
+ scheduleDispatch(s,first.eta)
+ const second=s.requests[1]
+ assert.deepEqual([second.from,second.target,second.status],['hub','p1','Погрузка'])
+ apply(s,{type:'ship',request:second.id,place:'hub'},first.eta+1)
+ apply(s,{type:'receive',request:second.id,place:'p1'},second.eta)
+ assert.equal(product(s,2).stock.p1,5)
+ assert.equal(product(s,2).stock.hub,0)
+})
+
+test('Return allocates the unit to the oldest waiting buyer',()=>{
+ const s=seed()
+ for(let i=0;i<13;i++)apply(s,{type:'order',product:2,to:'p2'})
+ const waiting=s.orders.at(-1)
+ apply(s,{type:'issue',order:s.orders[0].id,place:'p2'})
+ apply(s,{type:'return',order:s.orders[0].id,place:'p2'})
+ assert.equal(waiting.status,'Готов к выдаче')
+ apply(s,{type:'order',product:2,to:'p2'})
+ assert.equal(s.orders.at(-1).status,'Запрошен у продавца')
+})
+
+test('Persisted receipt events distinguish retries from a second physical scan',()=>{
+ let s=seed()
+ apply(s,{type:'transfer',product:2,place:'p2',to:'p1',qty:6},0)
+ scheduleDispatch(s,0)
+ scheduleDispatch(s,8000)
+ const r=s.requests[0]
+ apply(s,{type:'ship',request:r.id,place:'p2'},8001)
+ const event={type:'receive',request:r.id,place:'p1',received:2,eventId:'scan-1'}
+ apply(s,event,r.eta)
+ s=JSON.parse(JSON.stringify(s))
+ apply(s,event,r.eta)
+ assert.equal(product(s,2).stock.p1,2)
+ apply(s,{...event,eventId:'scan-2'},r.eta)
+ assert.equal(product(s,2).stock.p1,4)
+ assert.equal(s.requests[0].qty,2)
 })

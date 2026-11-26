@@ -40,6 +40,7 @@ export interface Order {
 export type RequestStatus = 'Новая' | 'Ожидает места' | 'Согласование' | 'Погрузка' | 'В пути' | 'Разгрузка' | 'Доставлено' | 'Отменено';
 
 export interface Shipment {
+    receipts?: {id:string;qty:number}[];
     id: number;
     product: number;
     qty: number;
@@ -111,7 +112,7 @@ export type Action =
     | { type: 'offer' | 'viaHub'; ids: number[]; purpose: string; place: string }
     | { type: 'reply'; batch: number; place: string; accept: boolean }
     | {type:'shortage';request:number;place:string;missing:number}
-    | { type: 'ship' | 'receive'; request: number; place: string; received?:number }
+    | { type: 'ship' | 'receive'; request: number; place: string; received?:number; eventId?:string }
     | { type: 'issue' | 'return'; order: number; place: string }
     | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure' | 'confirmReturn'; trip: number; place?:string }
     | { type: 'capacity'; place: string; value: string }

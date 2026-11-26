@@ -141,7 +141,7 @@ function demandDestination(s, city, category, liters, excluded) {
 }
 
 function request(s,p,qty,from,to,order,now){
-  const trunk=from==='hub'||place(s,from).city!==place(s,to).city
+  const trunk=from==='hub'||to==='hub'||place(s,from).city!==place(s,to).city
   const r={id:s.next++,product:p.id,qty,from,to,order,purpose:order?'pickup':'storage',created:s.day,queuedAt:now,status:'Новая',kind:trunk?'Магистраль':'Робот',target:null,tried:[],departed:false}
   s.requests.push(r);return r
 }
@@ -164,12 +164,16 @@ function arrive(s,r,now){
   if(order){
     order.pickup=r.purpose==='pickup'
     order.loc=r.target
-    order.status=order.loc===order.to?'Готов к выдаче':'Предложение'
+    order.status=r.onward?'Доставка':order.loc===order.to?'Готов к выдаче':'Предложение'
     order.cost+=(r.cost||0)
     if(order.status==='Готов к выдаче')order.readyAt=now
-  }else if(r.target!==r.to){
+  }
+  if(r.onward){
+    request(s,item,r.qty,r.target,r.onward,r.order,now)
+  }else if(!order&&r.target!==r.to){
     request(s,item,r.qty,r.target,r.to,null,now)
   }
+  fillWaiting(s,item,now)
 }
 function allocateOrder(s,item,order,now){
  const src=source(s,item,order.to)
@@ -232,7 +236,7 @@ export function apply(s,a,now=Date.now()){
    const qty=number(a.qty,1,10000,true)
    check(freeStock(s,p,q.id)>=qty,'Недостаточно свободного товара')
    const destination=a.city==null?to:demandDestination(s,a.city,p.category,p.liters*qty,q.id)
-   check(destination&&destination.id!=='hub'&&destination.id!==q.id,'Проверьте пункт назначения')
+   check(destination&&destination.id!==q.id,'Проверьте пункт назначения')
    request(s,p,qty,q.id,destination.id,null,now)
    return a.city==null?undefined:'Заявка создана для ПВЗ «'+destination.name+'»'
  }
@@ -240,7 +244,8 @@ export function apply(s,a,now=Date.now()){
    check(p&&to&&to.id!=='hub','Выберите товар и пункт выдачи')
    const order={id:s.next++,product:p.id,loc:to.id,to:to.id,status:'Запрошен у продавца',cost:0,created:s.day,createdAt:now}
    s.orders.push(order)
-   if(!allocateOrder(s,p,order,now))return 'Запрос на товар передан продавцу'
+   fillWaiting(s,p,now)
+   if(order.status==='Запрошен у продавца')return 'Запрос на товар передан продавцу'
    break
  }
  case 'choice':{
@@ -398,9 +403,18 @@ export function apply(s,a,now=Date.now()){
      }
      if(t)t.status='В пути'
    }else{
+     if(a.received!=null){
+       check(typeof a.eventId==='string' && /^[A-Za-z0-9_-]{1,100}$/.test(a.eventId),'Укажите идентификатор приёмки')
+       const prior=r.receipts?.find(entry=>entry.id===a.eventId)
+       if(prior){
+         check(prior.qty===Number(a.received)&&r.target===a.place,'Данные повторной приёмки отличаются')
+         return 'Приёмка уже учтена'
+       }
+     }
      check(r.pausedAt==null,'Рейс приостановлен')
      check(r.target===a.place&&['В пути','Разгрузка'].includes(r.status)&&now>=(r.eta||0),'Приёмка доступна в пункте назначения после прибытия')
      const received=number(a.received??r.qty,1,r.qty,true)
+     if(a.received!=null)(r.receipts??=[]).push({id:a.eventId,qty:received})
      if(received<r.qty){
        const costPerUnit=(r.cost??0)/r.qty
        const delivered={...r,id:s.next++,qty:received,cost:costPerUnit*received,cargo:[]}
@@ -447,6 +461,7 @@ export function apply(s,a,now=Date.now()){
    check(space(s,o.loc).free>=item.liters,'Нет места для возврата')
    addStock(item,o.loc,[{quantity:1,storedDays:0}],s.day)
    o.status='Возвращён'
+   fillWaiting(s,item,now)
    const entry=s.ledger.find(l=>l.order===o.id)
    entry.seller-=entry.price*.3+rates.returnHandling
    if(entry.comparison){
@@ -505,8 +520,50 @@ export function isVanPool(s,r) {
 }
 
 // No physical handovers are inferred by this scheduler.
+function balanceStock(s,now){
+ const offices=s.places.filter(p=>p.id!=='hub')
+ let changed=false
+ for(const item of s.products){
+   const target=new Map(offices.map(p=>[p.id,s.orders.filter(o=>o.product===item.id && o.to===p.id && o.created>s.day-7 && o.status!=='Возвращён').length]))
+   const inbound=id=>s.requests.filter(r=>active(r)&&!r.order&&r.product===item.id&&(r.onward??r.to)===id).reduce((n,r)=>n+r.qty,0)
+   const room=id=>{
+     const pending=s.requests.filter(r=>active(r)&&r.purpose==='storage'&&r.to===id&&!r.target)
+     return Math.max(0,Math.floor((space(s,id).free-volume(s,pending)+1e-8)/item.liters))
+   }
+   const move=(from,to,qty)=>{
+     if(qty<=0)return
+     request(s,item,qty,from,to,null,now)
+     changed=true
+   }
+   for(const origin of offices){
+     const stock=item.stock[origin.id]??0
+     if(!stock)continue
+     const available=freeStock(s,item,origin.id)
+     const lots=item.lots?.[origin.id]??[{since:item.day??0,quantity:stock}]
+     const aged=lots.filter(l=>l.order==null && l.since!=null && s.day-l.since>=14).reduce((n,l)=>n+l.quantity,0)
+     const pressure=origin.capacity>0 && space(s,origin.id).free<=origin.capacity*0.1
+     let excess=Math.min(available-target.get(origin.id),pressure?available:aged-(stock-available))
+     if(excess<=0)continue
+     const destinations=offices.filter(p=>p.id!==origin.id).sort((a,b)=>distance(origin,a)-distance(origin,b))
+     for(const dest of destinations){
+       const deficit=target.get(dest.id)-freeStock(s,item,dest.id)-inbound(dest.id)
+       const qty=Math.min(excess,deficit,room(dest.id))
+       if(qty>0){move(origin.id,dest.id,qty);excess-=qty}
+       if(!excess)break
+     }
+     move(origin.id,'hub',Math.min(excess,room('hub')))
+   }
+   for(const dest of offices){
+     const deficit=target.get(dest.id)-freeStock(s,item,dest.id)-inbound(dest.id)
+     move('hub',dest.id,Math.min(deficit,room(dest.id),freeStock(s,item,'hub')))
+   }
+ }
+ return changed
+}
+
 export function scheduleDispatch(s,now){
- let changed=scheduleRovers(s,now)
+ let changed=balanceStock(s,now)
+ if(scheduleRovers(s,now))changed=true
  const pools=Map.groupBy(s.requests.filter(r=>isVanPool(s,r)),r=>r.from+'-'+r.to)
  for(const rows of pools.values()){
    if(vanQuote(s,rows).saving<=0)continue
@@ -517,13 +574,20 @@ export function scheduleDispatch(s,now){
  for(const r of s.requests){
    if(r.kind==='Робот' && r.status==='Новая' && r.queuedAt==null){r.queuedAt=now;changed=true}
    if(r.kind==='Робот' && r.status==='Новая' && now-r.queuedAt>=60000){
-     apply(s,{type:'viaHub',ids:[r.id]},now)
+     r.onward=r.to
+     r.to='hub'
+     r.kind='Магистраль'
+     r.purpose='storage'
      changed=true
    }
-   if(r.kind==='Магистраль' && ['Новая','Ожидает места'].includes(r.status)){
-     const old=r.status
-     suggest(s,[r])
-     if(r.status!==old)changed=true
+   if(r.kind==='Магистраль' && ['Новая','Ожидает места','Согласование'].includes(r.status)){
+     const capacity=space(s,r.to).free+(r.target===r.to && r.status==='Согласование' && r.purpose==='storage'?volume(s,[r]):0)
+     const fits=r.purpose==='pickup'||capacity+1e-8>=volume(s,[r])
+     const status=fits?'Погрузка':'Ожидает места'
+     if(status!==r.status || (fits && r.target!==r.to))changed=true
+     r.status=status
+     r.target=fits?r.to:null
+     r.cost=rates.hubTransport*r.qty
    }
  }
  for(const trip of s.trips){

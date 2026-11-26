@@ -1,5 +1,4 @@
 import { num, placeOptions } from '../../functions/format';
-import { cargoLiters } from '../../functions/logistics';
 import { usePvz } from '../../hooks/usePvz';
 import shared from '../../styles/Shared.module.css';
 import type { CabinetProps } from '../../types';
@@ -20,7 +19,7 @@ export function Pvz(props: CabinetProps) {
     const { state, send, busy, offset } = props;
     const pvz = usePvz(state, send);
     const office = pvz.point.id;
-    const { approvals, loads, arrivals, ready, history } = pvz.queues;
+    const { loads, arrivals, ready, history } = pvz.queues;
 
     return (
         <>
@@ -37,25 +36,6 @@ export function Pvz(props: CabinetProps) {
                 <Panel title="Готовы к выдаче" scroll>
                     {ready.length ? ready.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)
                         : <p>Заказов к выдаче нет</p>}
-                </Panel>
-                <Panel title="Запросы на приёмку" scroll>
-                    {approvals.length ? approvals.map(items => {
-                        const batch = items[0].batch ?? items[0].id;
-                        return (
-                            <Entry key={batch}>
-                                <strong>Партия №{batch} · {num(cargoLiters(state, items))} л</strong>
-                                {items.map(shipment => <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset} />)}
-                                <div className={shared.actions}>
-                                    <Button primary disabled={busy} onClick={() => void send({ type: 'reply', batch, place: office, accept: true })}>
-                                        Согласовать приёмку
-                                    </Button>
-                                    <Button disabled={busy} onClick={() => void send({ type: 'reply', batch, place: office, accept: false })}>
-                                        Отклонить и перенаправить
-                                    </Button>
-                                </div>
-                            </Entry>
-                        );
-                    }) : <p>Входящих запросов нет</p>}
                 </Panel>
                 <Panel title="Грузы к отправке" scroll>
                     {loads.length ? loads.map(({ id, trip, items }) => (

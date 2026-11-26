@@ -17,8 +17,9 @@ export function Arrivals({ arrivals, office, state, offset, busy, send }: Props)
             <div className={styles.action}>
                 {shipment.missing && <small>Остаток ожидает уточнения от перевозчика</small>}
                 {shipment.status==='В пути' && shipment.qty>1 && shipment.pausedAt==null && <Button disabled={busy || now<(shipment.eta??0)} onClick={()=>{
-                    const value=window.prompt('Сколько упаковок фактически принято?')
-                    if(value!==null)void send({type:'receive',request:shipment.id,place:office,received:Number(value)})
+                    const credited=shipment.receipts?.reduce((sum,event)=>sum+event.qty,0)??0
+                    const value=window.prompt('Сколько упаковок принято всего по этой поставке? Уже учтено: '+credited)
+                    if(value!==null && Number(value)>credited)void send({type:'receive',request:shipment.id,place:office,received:Number(value)-credited,eventId:'total-'+Number(value)})
                 }}>Частичная приёмка</Button>}
                 {shipment.pausedAt != null ? <small>Рейс приостановлен</small>
                     : shipment.status === 'Погрузка' ? <small>Ожидает отправки</small>

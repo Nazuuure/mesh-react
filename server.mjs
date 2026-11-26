@@ -69,6 +69,11 @@ const server=http.createServer(async(req,res)=>{
     if(!roles[role].includes(action.type))return send(403,{error:'Действие выполняется на сайте соответствующего участника'})
     const result=await enqueue(async()=>{
       let s=tick(await load())
+      if(action.type==='receive' && action.eventId && s.requests.find(r=>r.id===Number(action.request))?.receipts?.some(e=>e.id===action.eventId)){
+        if(action.received==null)throw Error('Укажите количество принятого товара')
+        const notice=apply(s,action)
+        return {...respond(s),notice}
+      }
       if(action.version!==s.version)throw Error('Данные изменились. Обновите экран и повторите действие')
       const version=s.version
       const now=Date.now()
