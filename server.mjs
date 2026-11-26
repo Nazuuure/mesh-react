@@ -32,7 +32,8 @@ function tick(s){
  s.day+=days;s.clockAt+=days*120000
  return s
 }
-const respond=s=>({...s,serverNow:Date.now()})
+const cameraUrls = {'R-01':process.env.ROVER_R01_CAMERA_URL, 'R-02':process.env.ROVER_R02_CAMERA_URL}
+const respond=s=>({...s,cameraUrls,serverNow:Date.now()})
 let queue=Promise.resolve()
 const files={'/route-map.js':['route-map.js','application/javascript'],'/catalog.jpg':['catalog.jpg','image/jpeg'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
 for (const role of Object.keys(roles)) files['/'+role+'/app.js']=[role+'/app.js','application/javascript']

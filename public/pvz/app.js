@@ -1,5 +1,5 @@
 import {place, space, product} from '/model.mjs'
-import {routeMap} from '/route-map.js'
+import {routeMap, roverCameras} from '/route-map.js'
 import {
   root, state, start, render, post, hero, label, points, offices, panel,
   num, input, submit, reqRow, button, none, orderRow, stockLines, finance
@@ -65,7 +65,7 @@ function pvz() {
       ${panel('Грузы к отправке', dispatchQueue() || none('Грузов к отправке нет'))}
       ${panel('Ожидаемые поступления', arrivalQueue(inbound) || none('Ожидаемых поступлений нет'))}
     </div>` +
-    routeMap(state, office) +
+    routeMap(state, office) + roverCameras(state, office) +
     panel('Выданные заказы и возвраты', history.map(o => orderRow(o, office)).join('') || none('Выданных заказов нет')) +
     panel('Вместимость мини-склада', `<div class="row">
       <p><b class="stat">${num(volume.free)} л</b> свободно · занято ${num(volume.used)} л · под заявки ${num(volume.held)} л · зона выдачи отдельно ${num(volume.pickup)} л</p>

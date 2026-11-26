@@ -1,3 +1,4 @@
+import {demandMap} from '/route-map.js'
 import {categories,product,freeStock,packingLiters} from '/model.mjs'
 
 import {$, root, state, start, render, post, hero, panel, label, opts, points, field, input, submit, offices, num, stockLines, finance, reqRow, none} from '/app.js'
@@ -22,8 +23,6 @@ function listingForm() {
 function seller(){
  const p=product(state,transferProduct)||state.products[0]
  const stock=state.places.filter(q=>freeStock(state,p,q.id)>0)
- const stats=offices().filter(q=>q.city===heatCity).map(q=>({q,count:state.history.find(h=>h.place===q.id&&h.category===heatCat).count+state.orders.filter(o=>o.to===q.id&&product(state,o.product).category===heatCat).length}))
- const max=Math.max(...stats.map(z=>z.count))
  return hero('Кабинет продавца','Размещение товара, остатки и спрос по пунктам выдачи.')+
  panel('Добавить карточку и оприходовать товар',listingForm())+
  panel('Пополнить остаток по карточке',`<form data-form="restock" class="form">
@@ -33,7 +32,7 @@ function seller(){
   ${submit('Пополнить остаток')}
  </form>`)+
  panel('Переместить товар',`<form data-form="transfer" class="form">${label('Товар',`<select id="transferProduct" name="product">${opts(state.products.map(i=>[i.id,i.name]),p.id)}</select>`)}${field('place','Откуда',points(stock))}${field('to','Желаемый ПВЗ',points(offices(),'p2'))}${input('qty','Упаковок',3,1,1)}${submit('Отправить заявку')}</form>`)+
- panel('Спрос по категории',`<div class="row"><p class="muted">Заказы по желаемому ПВЗ · цвет темнее при большем спросе</p><div class="actions"><select aria-label="Город карты" id="heatCity">${opts([...new Set(offices().map(q=>q.city))].map(c=>[c,c]),heatCity)}</select><select id="heatCat" aria-label="Категория карты">${opts(categories.map(c=>[c,c]),heatCat)}</select></div></div><div class="heatwrap"><div class="heat">${stats.map(({q,count})=>`<b class="pin" style="grid-column:${q.x};grid-row:${q.y};background:hsl(280 60% ${88-40*count/max}%);color:${count/max>.65?'white':'#361844'}">${q.name} · ${count}</b>`).join('')}</div></div><small>Условная схема города. Стартовая история демонстрационная, каждый новый заказ обновляет карту.</small>`)+
+ panel('Спрос по категории',`<div class="row"><p class="muted">Заказы по желаемому ПВЗ · цвет темнее при большем спросе</p><div class="actions"><select aria-label="Город карты" id="heatCity">${opts([...new Set(offices().map(q=>q.city))].map(c=>[c,c]),heatCity)}</select><select id="heatCat" aria-label="Категория карты">${opts(categories.map(c=>[c,c]),heatCat)}</select></div></div>${demandMap(state,heatCity,heatCat)}`)+
  `<div class="cols">${panel('Товар на полках',stockLines())}${panel('Экономика продавца',finance())}</div>`+
  panel('Заявки продавца',state.requests.filter(r=>!r.order).slice().reverse().map(reqRow).join('')||none('Заявок пока нет'))
 }
