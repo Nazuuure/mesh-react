@@ -135,18 +135,18 @@ test('Catalog expansion is repeatable without overwriting existing data or overf
  assert.equal(s.products.length,16)
 })
 
-test('Rover rejects oversize items and enforces cargo limits',()=>{
+test('Rover enforces independent volume and payload limits',()=>{
  const s=seed()
- const trip=(dims,qty)=>{
-  apply(s,{type:'product',name:'Тестовая упаковка',category:'Дом',dims,qty,price:100,place:'p1'})
+ const trip=(dims,qty,weightKg)=>{
+  apply(s,{type:'product',name:'Тестовая упаковка',category:'Дом',dims,qty,weightKg,price:100,place:'p1'})
   apply(s,{type:'transfer',product:s.products.at(-1).id,qty,place:'p1',to:'p2'})
   apply(s,{type:'trip',ids:[s.requests.at(-1).id],robot:'R-01'})
  }
  // Give the fixture sufficient storage at both pickup offices.
  for(const id of ['p1','p2'])apply(s,{type:'capacity',place:id,value:1500})
- assert.equal(rover.liters,375.584)
- assert.throws(()=>trip([89,1,1],3),/не помещается/)
- assert.throws(()=>trip([55,55,55],3),/Общий объём/)
- trip([55,88,77.6/3],3)
+ assert.equal(rover.liters,61)
+ assert.throws(()=>trip([10,10,10],5,5.01),/Масса груза/)
+ assert.throws(()=>trip([10,10,122.1],5,1),/Общий объём/)
+ trip([10,10,122],5,5)
  assert.equal(s.trips.length,1)
 })

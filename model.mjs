@@ -12,15 +12,17 @@ const catalogAdditions = [
   ['Чехол Travel','Аксессуары',890,1,'🎒',{p2:5,p4:5,p5:5}]
 ]
 
-const cargoDimensions = [88, 55, 77.6]
 export const rover = {
-  dimensions: cargoDimensions,
-  liters: packingLiters(cargoDimensions),
+  liters: 61,
+  maxKg: 25,
   minUnits: 3,
   idealMin: 8,
   idealMax: 14
 }
-const sortedCargoDimensions = [...cargoDimensions].sort((a,b)=>a-b)
+// Legacy and demo cards use a nominal one-kilogram package.
+export function loadKg(s, rows) {
+  return rows.reduce((sum, row) => sum + (product(s,row.product).weightKg ?? 1) * row.qty, 0)
+}
 
 export function seed(){
   const places = [
@@ -115,7 +117,7 @@ export function apply(s,a,now=Date.now()){
    const liters=packingLiters(a.dims),qty=number(a.qty,1,10000,true)
    check(space(s,q.id).free>=liters*qty,'Недостаточно места')
    check(Array.isArray(a.dims)&&a.dims.length===3,'Введите габариты')
-   s.products.push({id:s.next++,name:a.name.trim(),category:a.category,price:number(a.price,.01,1e7),liters,dims:a.dims.map(v=>number(v,.01,1000)),stock:{[q.id]:qty},icon:'📦',day:s.day});break
+   s.products.push({id:s.next++,name:a.name.trim(),category:a.category,price:number(a.price,.01,1e7),liters,weightKg:number(a.weightKg ?? 1,.001,1e6),dims:a.dims.map(v=>number(v,.01,1000)),stock:{[q.id]:qty},icon:'📦',day:s.day});break
  }
  case 'restock': {
    check(p&&q,'Выберите товар и точку размещения')
@@ -207,12 +209,7 @@ function prepareTrip(s,a,rows){
    const qty=rows.reduce((n,r)=>n+r.qty,0)
    check(qty >= rover.minUnits, 'Для рейса нужно не менее '+rover.minUnits+' упаковок')
    check(volume(s,rows) <= rover.liters + 1e-8, 'Общий объём груза превышает '+rover.liters+' л')
-   // ponytail: individual fit and total volume are checked; mixed-box packing needs a 3D solver.
-   for (const row of rows) {
-     const item = product(s,row.product)
-     check([...item.dims].sort((a,b)=>a-b).every((size,index)=>size<=sortedCargoDimensions[index]),
-       'Упаковка не помещается в багажник: '+item.name)
-   }
+   check(loadKg(s,rows) <= rover.maxKg + 1e-8, 'Масса груза превышает '+rover.maxKg+' кг')
    check(['R-01','R-02'].includes(a.robot)&&!s.trips.some(t=>t.robot===a.robot&&!['Сбой','Завершён'].includes(t.status)),'Робот занят')
    const stops=[...new Set(rows.map(r=>r.to))],route=[rows[0].from]
    for(const id of stops)check(space(s,id).free>=volume(s,rows.filter(r=>r.to===id&&r.purpose!=='pickup')),'Нет места в пункте назначения')

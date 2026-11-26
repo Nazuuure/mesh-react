@@ -13,6 +13,7 @@ function listingForm() {
   ${input('l','Длина, см',10)}${input('w','Ширина, см',10)}${input('h','Высота, см',20)}
   <label>Объём упаковки<output id="liters">2 л</output></label>
   ${field('place','Место размещения',opts(locations,'p1'))}
+  ${input('weightKg','Масса одной упаковки, кг',1,.001)}
   ${input('qty','Количество в этой точке, шт.',3,1,1)}
   ${submit('Добавить товар')}
  </form>`
