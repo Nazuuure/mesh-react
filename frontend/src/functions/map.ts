@@ -43,10 +43,9 @@ export function demandStats(state: MeshState, points: Place[], category: string)
 }
 
 export function heatCircles(rows: ReturnType<typeof demandStats>) {
-    const largest = Math.max(1, ...rows.map(row => row.count));
     return rows.flatMap(({ point, count }) => {
         const [x, y] = mapPoint(point);
-        const intensity = count / largest;
+        const intensity = count / (count + 15);
         return [1, 0.72, 0.44].map(scale => ({
             id: point.id + ':' + scale,
             x,

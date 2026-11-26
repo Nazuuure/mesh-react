@@ -111,7 +111,7 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                                             </Button>
                                         </>
                                     )}
-                                    <Button disabled={busy} onClick={() => void send({ type: 'failure', trip: trip.id })}>Сбой и возврат на базу</Button>
+                                    <Button disabled={busy} onClick={() => void send({ type: trip.awaitingCarrier?'confirmReturn':'failure', trip: trip.id })}>{trip.awaitingCarrier?'Перевозчик подтвердил возврат на базу':'Сообщить о сбое рейса'}</Button>
                                 </div>
                             )}
                         </Entry>

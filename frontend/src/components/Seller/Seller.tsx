@@ -1,5 +1,5 @@
 import { categories } from '../../../../model.mjs';
-import { placeOptions, productOptions } from '../../functions/format';
+import { pointAddress, itemName, placeOptions, productOptions } from '../../functions/format';
 import { useSeller } from '../../hooks/useSeller';
 import shared from '../../styles/Shared.module.css';
 import type { CabinetProps } from '../../types';
@@ -16,12 +16,21 @@ import { Stock } from '../Stock/Stock';
 
 export function Seller({ state, send, busy, offset }: CabinetProps) {
     const seller = useSeller(state, send);
+    const waiting = state.orders.filter(order => order.status === 'Запрошен у продавца');
     const products = productOptions(state.products);
     const requests = state.requests.filter(request => !request.order).toReversed();
 
     return (
         <>
             <Hero title="Кабинет продавца" description="Размещение товара, остатки и спрос по пунктам выдачи." />
+            {waiting.length>0 && <Panel title="Запросы покупателей" scroll>
+                {waiting.map(order=><div key={order.id}>
+                    <p>Заказ №{order.id} · {itemName(state,order.product)} · {pointAddress(state,order.to)}</p>
+                    <Button disabled={busy} onClick={()=>void send({type:'restock',product:String(order.product),qty:'1',place:order.to})}>
+                        Оприходовать 1 шт. в этом ПВЗ
+                    </Button>
+                </div>)}
+            </Panel>}
             <Panel title="Город размещения и карта спроса">
                 <div className={shared.form}>
                     <SelectField label="Город размещения" options={seller.cities.map(city => [city, city])}

@@ -15,6 +15,11 @@ export function Arrivals({ arrivals, office, state, offset, busy, send }: Props)
     return arrivals.map(shipment => (
         <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset}>
             <div className={styles.action}>
+                {shipment.missing && <small>Остаток ожидает уточнения от перевозчика</small>}
+                {shipment.status==='В пути' && shipment.qty>1 && shipment.pausedAt==null && <Button disabled={busy || now<(shipment.eta??0)} onClick={()=>{
+                    const value=window.prompt('Сколько упаковок фактически принято?')
+                    if(value!==null)void send({type:'receive',request:shipment.id,place:office,received:Number(value)})
+                }}>Частичная приёмка</Button>}
                 {shipment.pausedAt != null ? <small>Рейс приостановлен</small>
                     : shipment.status === 'Погрузка' ? <small>Ожидает отправки</small>
                     : (

@@ -56,7 +56,12 @@ export function Pvz(props: CabinetProps) {
                     {loads.length ? loads.map(({ id, trip, items }) => (
                         <Entry key={id}>
                             {trip && <strong>Рейс №{trip.id}</strong>}
-                            {items.map(shipment => <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset} />)}
+                            {items.map(shipment => <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset}>
+                                <Button disabled={busy} onClick={()=>{
+                                    const value=window.prompt('Сколько упаковок не найдено при сборке?')
+                                    if(value!==null)void send({type:'shortage',request:shipment.id,place:office,missing:Number(value)})
+                                }}>Указать недостачу</Button>
+                            </RequestCard>)}
                             <Button primary disabled={busy} onClick={() => void send({ type: 'ship', request: items[0].id, place: office })}>
                                 Подтвердить погрузку и отправку
                             </Button>

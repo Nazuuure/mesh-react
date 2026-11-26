@@ -29,7 +29,7 @@ test('Hub order: rejection, rerouting, alternate pickup, robot failure, issue an
  act('trip',args)
  const t=s.trips[0]
  act('ship',{request:local.id,place:'p1'});assert.equal(product(s,3).stock.p1,0)
- act('failure',{trip:t.id});assert.equal(product(s,3).stock.p1,1)
+ act('failure',{trip:t.id});assert.equal(product(s,3).stock.p1,0);act('confirmReturn',{trip:t.id});assert.equal(product(s,3).stock.p1,1)
  act('trip',args);const t2=s.trips.at(-1)
  act('ship',{request:local.id,place:'p1'});apply(s,{type:'receive',request:local.id,place:'p2'},local.eta);const extra=s.requests.at(-1);apply(s,{type:'receive',request:extra.id,place:'p2'},extra.eta);assert.equal(t2.status,'Завершён')
  assert.equal(o.status,'Готов к выдаче');assert.equal(o.loc,'p2')

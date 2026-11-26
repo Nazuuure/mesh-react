@@ -21,7 +21,7 @@ export function Product({ listing, busy, onOrder }: { listing: Listing; busy: bo
             <small>{hint}{address && ' · ' + address}</small>
             {timing && <small>{timing}</small>}
             {locations.length > 1 && <small>В наличии · {locations.map(point => point.name).join(' / ')}</small>}
-            <Button primary disabled={busy || !available} onClick={() => onOrder(item.id)}>Заказать</Button>
+            <Button primary disabled={busy} onClick={() => onOrder(item.id)}>{available ? 'Заказать' : 'Заказать у продавца'}</Button>
         </article>
     );
 }

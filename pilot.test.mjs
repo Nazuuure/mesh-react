@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compareRoutes, profitBoundary } from './economics.mjs';
-import { apply, localKm, product, scheduleRovers, seed, space, syncGeography } from './model.mjs';
+import { apply, demandAt, freeStock, localKm, product, scheduleRovers, seed, space, syncGeography } from './model.mjs';
 
 const scenario = {
     units: 8, unitLiters: 1, liters: 8, meshDays: 7, hubDays: 7,
@@ -136,6 +136,8 @@ test('A failed rover charges only the departed attempt and assigns courier cost 
     apply(state, { type: 'dispatchCourier', trip: trip.id }, 6600);
     apply(state, { type: 'rescue', trip: trip.id }, 7000);
     apply(state, { type: 'failure', trip: trip.id }, 7500);
+    assert.equal(trip.awaitingCarrier,true);
+    apply(state,{type:'confirmReturn',trip:trip.id},7501);
     assert.equal(trip.failedTransport, 360);
     assert.equal(trip.assistanceCost, 60);
     assert.equal(product(state, 2).stock.p2, 12);
@@ -271,3 +273,47 @@ test('Legacy points acquire symmetric distances and retain supplied coordinates'
     syncGeography(s);
     assert.ok(Math.abs(localKm(p,q)-111.195)<0.001);
 });
+
+test('Unfilled orders raise pickup demand once and are allocated FIFO on replenishment',()=>{
+    const s=seed(), item=product(s,2);
+    for(let i=0;i<12;i++)apply(s,{type:'order',product:2,to:'p2'});
+    const score=()=>demandAt(s,'p1',item.category).count;
+    const before=score();
+    for(let i=0;i<2;i++)apply(s,{type:'order',product:2,to:'p1'});
+    const [first,second]=s.orders.slice(-2);
+    assert.equal(first.status,'Запрошен у продавца');
+    assert.equal(score(),before+2);
+    assert.equal(freeStock(s,item,'p1'),0);
+    assert.equal(s.requests.length,0);
+    apply(s,{type:'restock',product:2,place:'p1',qty:1});
+    assert.equal(first.status,'Готов к выдаче');
+    assert.equal(second.status,'Запрошен у продавца');
+    assert.equal(score(),before+2);
+    assert.equal(freeStock(s,item,'p1'),0);
+});
+
+test('Short count releases the reservation and isolates missing stock',()=>{
+ const s=seed(), p=product(s,1)
+ apply(s,{type:'transfer',product:1,qty:3,place:'p1',to:'p2'})
+ const r=s.requests[0]
+ apply(s,{type:'trip',ids:[r.id],robot:'R-01'})
+ apply(s,{type:'shortage',request:r.id,place:'p1',missing:1})
+ assert.equal(p.stock.p1,11)
+ assert.equal(s.discrepancies[0].qty,1)
+ assert.equal(r.qty,2)
+ assert.equal(space(s,'p2').held,0)
+})
+test('Partial receipt credits only counted packages and leaves the rest in transit',()=>{
+ const s=seed(), p=product(s,1)
+ apply(s,{type:'transfer',product:1,qty:3,place:'p1',to:'p2'})
+ const r=s.requests[0]
+ apply(s,{type:'trip',ids:[r.id],robot:'R-01'})
+ apply(s,{type:'ship',request:r.id,place:'p1'},1000)
+ apply(s,{type:'receive',request:r.id,place:'p2',received:1},r.eta)
+ assert.equal(p.stock.p2,1)
+ assert.equal(r.status,'В пути')
+ assert.equal(r.qty,2)
+ apply(s,{type:'receive',request:r.id,place:'p2'},r.eta)
+ assert.equal(p.stock.p2,3)
+ assert.equal(s.trips[0].status,'Завершён')
+})

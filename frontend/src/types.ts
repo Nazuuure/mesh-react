@@ -27,7 +27,7 @@ export interface Product {
     icon?: string;
 }
 
-export type OrderStatus = 'Предложение' | 'Доставка' | 'В пути' | 'Готов к выдаче' | 'Выдан' | 'Возвращён';
+export type OrderStatus = 'Запрошен у продавца' | 'Предложение' | 'Доставка' | 'В пути' | 'Готов к выдаче' | 'Выдан' | 'Возвращён';
 
 export interface Order {
     id: number;
@@ -54,6 +54,7 @@ export interface Shipment {
     sentAt?: number;
     eta?: number;
     pausedAt?: number;
+    missing?: boolean;
     queuedAt?: number;
 }
 
@@ -64,6 +65,7 @@ export interface Trip {
     ids: number[];
     status: 'Погрузка' | 'В пути' | 'Разгрузка' | 'Завершён' | 'Сбой';
     incident?: { at: number; dispatchedAt?: number | null; resumedAt?: number };
+    awaitingCarrier?: boolean;
     assistanceCost?: number;
     failedTransport?: number;
 }
@@ -103,14 +105,15 @@ export type Action =
     | { type: 'order'; product: number; to: string }
     | { type: 'choice'; order: number; accept: boolean }
     | { type: 'product'; name: string; category: string; price: string; dims: string[]; qty: string; city: string; weightKg: string }
-    | { type: 'restock'; product: string; qty: string; city: string }
+    | { type: 'restock'; product: string; qty: string; city?: string; place?: string }
     | { type: 'transfer'; product: string; qty: string; place: string; city: string }
     | { type: 'van'; ids: number[] }
     | { type: 'offer' | 'viaHub'; ids: number[]; purpose: string; place: string }
     | { type: 'reply'; batch: number; place: string; accept: boolean }
-    | { type: 'ship' | 'receive'; request: number; place: string }
+    | {type:'shortage';request:number;place:string;missing:number}
+    | { type: 'ship' | 'receive'; request: number; place: string; received?:number }
     | { type: 'issue' | 'return'; order: number; place: string }
-    | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure'; trip: number }
+    | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure' | 'confirmReturn'; trip: number }
     | { type: 'capacity'; place: string; value: string }
     | { type: 'day' | 'reset' };
 

@@ -107,7 +107,7 @@ export const place=(s,id)=>s.places.find(p=>p.id===id)
 export const product=(s,id)=>s.products.find(p=>p.id===Number(id))
 const active=r=>!['Доставлено','Отменено'].includes(r.status)
 export function freeStock(s,p,loc){
-  const orders=s.orders.filter(o=>o.product===p.id&&o.loc===loc&&!['Выдан','Возвращён','В пути'].includes(o.status)).length
+  const orders=s.orders.filter(o=>o.product===p.id&&o.loc===loc&&!['Запрошен у продавца','Выдан','Возвращён','В пути'].includes(o.status)).length
   const reserved=s.requests.filter(r=>!r.order&&r.product===p.id&&r.from===loc&&active(r)&&!r.departed).reduce((a,r)=>a+r.qty,0)
   return (p.stock[loc]||0)-orders-reserved
 }
@@ -171,6 +171,22 @@ function arrive(s,r,now){
     request(s,item,r.qty,r.target,r.to,null,now)
   }
 }
+function allocateOrder(s,item,order,now){
+ const src=source(s,item,order.to)
+ if(!src)return false
+ order.loc=src.id
+ if(src.id===order.to){order.status='Готов к выдаче';order.readyAt=now}
+ else if(src.id==='hub'||src.city!==place(s,order.to).city){
+   order.status='Доставка'
+   request(s,item,1,src.id,order.to,order.id,now)
+ }else order.status='Предложение'
+ return true
+}
+function fillWaiting(s,item,now){
+ for(const order of s.orders){
+   if(order.product===item.id && order.status==='Запрошен у продавца' && !allocateOrder(s,item,order,now))break
+ }
+}
 export function packingLiters(dims){
  check(Array.isArray(dims)&&dims.length===3,'Введите три размера упаковки')
  return dims.map(v=>number(v,.01,1000)).reduce((v,n)=>v*n,1)/1000
@@ -207,6 +223,7 @@ export function apply(s,a,now=Date.now()){
    const destination=a.city==null?q:demandDestination(s,a.city,p.category,p.liters*qty)
    check(destination&&space(s,destination.id).free+1e-8>=p.liters*qty,'Недостаточно места')
    addStock(p,destination.id,[{quantity:qty,storedDays:0}],s.day)
+   fillWaiting(s,p,now)
    return a.city==null?undefined:'Остаток пополнен в ПВЗ «'+destination.name+'»'
  }
  case 'capacity':check(q&&q.id!=='hub','Выберите ПВЗ');{const v=number(a.value,0,1e6);check(v>=q.capacity-space(s,q.id).free,'Объём занят товаром или обещан входящей партии');q.capacity=v}break
@@ -220,11 +237,10 @@ export function apply(s,a,now=Date.now()){
    return a.city==null?undefined:'Заявка создана для ПВЗ «'+destination.name+'»'
  }
  case 'order':{
-   check(p&&to&&to.id!=='hub','Выберите товар и пункт выдачи');const src=source(s,p,to.id);check(src,'Товар закончился')
-   const order={id:s.next++,product:p.id,loc:src.id,to:to.id,status:'Предложение',cost:0,created:s.day,createdAt:now}
+   check(p&&to&&to.id!=='hub','Выберите товар и пункт выдачи')
+   const order={id:s.next++,product:p.id,loc:to.id,to:to.id,status:'Запрошен у продавца',cost:0,created:s.day,createdAt:now}
    s.orders.push(order)
-   if(src.id===to.id){order.status='Готов к выдаче';order.readyAt=now}
-   else if(src.id==='hub'||src.city!==to.city){order.status='Доставка';request(s,p,1,src.id,to.id,order.id,now)}
+   if(!allocateOrder(s,p,order,now))return 'Запрос на товар передан продавцу'
    break
  }
  case 'choice':{
@@ -244,6 +260,34 @@ export function apply(s,a,now=Date.now()){
    check(quote.saving>0,'Недостаточно упаковок для выгодного рейса')
    check(space(s,rows[0].to).free>=volume(s,rows.filter(r=>r.purpose!=='pickup')),'Недостаточно места в принимающем ПВЗ')
    for(const r of rows)Object.assign(r,{kind:'Газель',batch:rows[0].id,target:r.to,status:'Погрузка',cost:quote.fare*r.qty/quote.units})
+   break
+ }
+ case 'shortage':{
+   const row=s.requests.find(r=>r.id===Number(a.request))
+   check(row?.status==='Погрузка' && !row.departed && row.from===a.place,'Недостача фиксируется до отправки')
+   const missing=number(a.missing,1,row.qty,true)
+   const item=product(s,row.product)
+   const trip=s.trips.find(t=>t.status==='Погрузка' && t.ids.includes(row.id))
+   if(trip)apply(s,{type:'failure',trip:trip.id},now)
+   const batch=s.requests.filter(r=>r.status==='Погрузка' && r.batch===row.batch && r.kind==='Газель')
+   for(const r of batch)Object.assign(r,{kind:'Робот',status:'Новая',target:null})
+   const cargo=takeStock(item,row.from,missing,s.day,row.order)
+   ;(s.discrepancies??=[]).push({request:row.id,place:row.from,product:item.id,qty:missing,cargo,at:now})
+   row.qty-=missing
+   row.status=row.qty?'Новая':'Отменено'
+   row.target=null
+   if(row.order){
+     const order=s.orders.find(o=>o.id===row.order)
+     order.status='Запрошен у продавца'
+     allocateOrder(s,item,order,now)
+   }else{
+     let remaining=missing
+     for(const site of s.places.filter(p=>p.id!==row.from && p.id!==row.to)){
+       const qty=Math.min(remaining,freeStock(s,item,site.id))
+       if(qty>0){request(s,item,qty,site.id,row.to,null,now);remaining-=qty}
+       if(!remaining)break
+     }
+   }
    break
  }
  case 'viaHub':check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'),'Выберите новые городские заявки');for(const r of rows)r.kind='Магистраль';break
@@ -266,7 +310,7 @@ export function apply(s,a,now=Date.now()){
  }
  case 'stuck':case 'dispatchCourier':case 'rescue':{
    const trip=s.trips.find(t=>t.id===Number(a.trip))
-   check(trip?.status==='В пути','Выберите активный рейс')
+   check(!trip?.awaitingCarrier && trip?.status==='В пути','Выберите активный рейс')
    const shipments=s.requests.filter(r=>trip.ids.includes(r.id))
    if(a.type==='stuck'){
      check(!trip.incident,'Симуляция уже проведена для этого рейса')
@@ -300,14 +344,21 @@ export function apply(s,a,now=Date.now()){
    }
    break
  }
- case 'ship':case 'receive':case 'failure':{
+ case 'ship':case 'receive':case 'confirmReturn':case 'failure':{
    const r=s.requests.find(r=>r.id===Number(a.request))
-   const t=a.type==='failure'?s.trips.find(t=>t.id===Number(a.trip)):s.trips.find(t=>t.ids.includes(r?.id)&&!['Сбой','Завершён'].includes(t.status))
+   const t=['failure','confirmReturn'].includes(a.type)?s.trips.find(t=>t.id===Number(a.trip)):s.trips.find(t=>t.ids.includes(r?.id)&&!['Сбой','Завершён'].includes(t.status))
    const items=t?s.requests.filter(r=>t.ids.includes(r.id)):
      a.type==='ship' && r?.kind==='Газель'?s.requests.filter(i=>i.kind==='Газель' && i.batch===r.batch):[r]
-   if(a.type==='failure'){
+   if(a.type==='failure'||a.type==='confirmReturn'){
      check(t&&['Погрузка','В пути','Разгрузка'].includes(t.status),'Рейс уже закрыт')
      const moving=items.filter(i=>i.departed&&i.status!=='Доставлено')
+     if(a.type==='confirmReturn')check(t.awaitingCarrier,'Нет запроса перевозчику')
+     if(moving.length && a.type==='failure'){
+       check(!t.awaitingCarrier,'Уже ожидается подтверждение')
+       t.awaitingCarrier=true
+       for(const row of moving)row.pausedAt=now
+       return 'Ожидается подтверждение перевозчика о возврате груза'
+     }
      const held=moving.filter(i=>!s.orders.find(o=>o.id===i.order)?.pickup)
      check(space(s,t.route[0]).free>=volume(s,held),'Освободите место для возврата')
      t.failedTransport=moving.reduce((total,i)=>total+(i.cost??0),0)
@@ -323,7 +374,7 @@ export function apply(s,a,now=Date.now()){
        delete i.pausedAt
        Object.assign(i,{departed:false,status:'Новая',target:null,sentAt:null,eta:null})
      }
-     t.status='Сбой';break
+     delete t.awaitingCarrier;t.status='Сбой';break
    }
    check(r,'Заявка не найдена')
    if(a.type==='ship'){
@@ -342,6 +393,26 @@ export function apply(s,a,now=Date.now()){
    }else{
      check(r.pausedAt==null,'Рейс приостановлен')
      check(r.target===a.place&&['В пути','Разгрузка'].includes(r.status)&&now>=(r.eta||0),'Приёмка доступна в пункте назначения после прибытия')
+     const received=number(a.received??r.qty,1,r.qty,true)
+     if(received<r.qty){
+       const costPerUnit=(r.cost??0)/r.qty
+       const delivered={...r,id:s.next++,qty:received,cost:costPerUnit*received,cargo:[]}
+       const remaining=[]
+       let needed=received
+       for(const lot of shippedCargo(product(s,r.product),r)){
+         const n=Math.min(needed,lot.quantity)
+         if(n)delivered.cargo.push({...lot,quantity:n})
+         if(lot.quantity>n)remaining.push({...lot,quantity:lot.quantity-n})
+         needed-=n
+       }
+       check(needed===0,'Расхождение с грузовой ведомостью')
+       r.qty-=received;r.cost=costPerUnit*r.qty;r.cargo=remaining;r.missing=true
+       s.requests.push(delivered)
+       if(t)t.ids.push(delivered.id)
+       arrive(s,delivered,now);delivered.receivedAt=now
+       return 'Принята часть партии. Остаток ожидает уточнения перевозчика'
+     }
+     delete r.missing
      arrive(s,r,now);r.receivedAt=now
      if(t&&items.every(i=>i.status==='Доставлено'))t.status='Завершён'
    }
