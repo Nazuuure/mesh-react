@@ -1,3 +1,4 @@
+import {updateRovers} from '/route-map.js'
 import {place,product,freeStock} from '/model.mjs'
 const $=s=>document.querySelector(s),root=$('#main')
 const role=document.documentElement.dataset.site
@@ -39,6 +40,7 @@ function progress(r){
 }
 function updateTimers(){
  const now=Date.now()+skew
+ updateRovers(root, now)
  for(const el of root.querySelectorAll('.journey')){
    const start=+el.dataset.start,end=+el.dataset.end,left=Math.max(0,Math.ceil((end-now)/1000))
    el.querySelector('progress').value=left?Math.max(0,100*(now-start)/Math.max(1,end-start)):100
