@@ -8,7 +8,7 @@ export function RoverCameras({ state }: { state: MeshState }) {
     const trips = activeTrips(state);
 
     return (
-        <Panel title="Камера ровера">
+        <Panel title="Камера ровера" scroll>
             {trips.length ? trips.map(trip => {
                 const url = state.cameraUrls?.[trip.robot];
                 return (

@@ -32,7 +32,7 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                 <RoverCameras state={state} />
             </div>
             {dispatcher.hubLoads.length > 0 && (
-                <Panel title="Передача груза">
+                <Panel title="Передача груза" scroll>
                     {dispatcher.hubLoads.map(shipment => (
                         <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset}>
                             <div className={styles.ship}>
@@ -44,12 +44,12 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                     ))}
                 </Panel>
             )}
-            <Panel title="Очередь заявок">
+            <Panel title="Очередь заявок" scroll>
                 {dispatcher.groups.length ? dispatcher.groups.map(group => (
                     <DispatchForm key={group.key} state={state} send={send} busy={busy} group={group} notify={notify} offset={offset} />
                 )) : <p>Новых заявок нет. Создайте перемещение у продавца или оформите заказ.</p>}
             </Panel>
-            <Panel title="Рейсы роботов">
+            <Panel title="Рейсы роботов" scroll>
                 <p className={shared.muted}>
                     Багажник {num(rover.liters)} л · груз до {rover.maxKg} кг · от {rover.minUnits} упаковок
                     · рекомендуемая загрузка {rover.idealMin}–{rover.idealMax}
@@ -95,8 +95,8 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                 }) : <p>Рейсов пока нет</p>}
             </Panel>
             <PilotComparison />
-            <Panel title="Экономика WB"><Finances state={state} role="wb" /></Panel>
-            <Panel title="Все заявки">
+            <Panel title="Экономика WB" scroll><Finances state={state} role="wb" /></Panel>
+            <Panel title="Все заявки" scroll>
                 {dispatcher.history.length ? dispatcher.history.map(shipment => (
                     <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset} />
                 )) : <p>История пуста</p>}

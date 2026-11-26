@@ -13,7 +13,7 @@ export function RouteMap({ state, office, offset }: { state: MeshState; office?:
     const cities = cityRoutes(state, office, now);
 
     return (
-        <Panel title="Карта рейсов роверов">
+        <Panel title="Карта рейсов роверов" scroll>
             {cities.map(({ city, points, routes }) => (
                 <Fragment key={city}>
                     <CityMap points={points} city={city} caption="Расчётные маршруты роверов"

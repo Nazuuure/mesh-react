@@ -53,10 +53,10 @@ export function Seller({ state, send, busy, offset }: CabinetProps) {
                 <DemandMap state={state} city={seller.city} category={seller.category} />
             </Panel>
             <div className={shared.columns}>
-                <Panel title="Товар на полках"><Stock state={state} /></Panel>
-                <Panel title="Экономика продавца"><Finances state={state} role="seller" /></Panel>
+                <Panel title="Товар на полках" scroll><Stock state={state} /></Panel>
+                <Panel title="Экономика продавца" scroll><Finances state={state} role="seller" /></Panel>
             </div>
-            <Panel title="Заявки продавца">
+            <Panel title="Заявки продавца" scroll>
                 {requests.length ? requests.map(shipment => <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset} />)
                     : <p>Заявок пока нет</p>}
             </Panel>

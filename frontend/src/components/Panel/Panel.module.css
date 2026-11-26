@@ -11,3 +11,11 @@
     margin: 0 0 12px;
     font-size: 17px;
 }
+
+.scrollable {
+    max-block-size: min(24rem, 65vh);
+    margin: -3px;
+    padding: 3px 8px 4px 3px;
+    overflow: auto;
+    scrollbar-gutter: stable;
+}

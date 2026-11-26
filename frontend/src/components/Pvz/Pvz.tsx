@@ -29,11 +29,11 @@ export function Pvz(props: CabinetProps) {
                     onChange={event => pvz.select(event.target.value)} />
             </Hero>
             <div className={shared.columns}>
-                <Panel title="Готовы к выдаче">
+                <Panel title="Готовы к выдаче" scroll>
                     {ready.length ? ready.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)
                         : <p>Заказов к выдаче нет</p>}
                 </Panel>
-                <Panel title="Запросы на приёмку">
+                <Panel title="Запросы на приёмку" scroll>
                     {approvals.length ? approvals.map(items => {
                         const batch = items[0].batch ?? items[0].id;
                         return (
@@ -52,7 +52,7 @@ export function Pvz(props: CabinetProps) {
                         );
                     }) : <p>Входящих запросов нет</p>}
                 </Panel>
-                <Panel title="Грузы к отправке">
+                <Panel title="Грузы к отправке" scroll>
                     {loads.length ? loads.map(({ id, trip, items }) => (
                         <Entry key={id}>
                             {trip && <strong>Рейс №{trip.id}</strong>}
@@ -63,12 +63,12 @@ export function Pvz(props: CabinetProps) {
                         </Entry>
                     )) : <p>Грузов к отправке нет</p>}
                 </Panel>
-                <Panel title="Ожидаемые поступления">
+                <Panel title="Ожидаемые поступления" scroll>
                     <Arrivals {...props} office={office} arrivals={arrivals} />
                 </Panel>
             </div>
             <RouteMap state={state} office={office} offset={offset} />
-            <Panel title="Выданные заказы и возвраты">
+            <Panel title="Выданные заказы и возвраты" scroll>
                 {history.length ? history.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)
                     : <p>Выданных заказов нет</p>}
             </Panel>
@@ -85,8 +85,8 @@ export function Pvz(props: CabinetProps) {
                 </div>
             </Panel>
             <div className={shared.columns}>
-                <Panel title="Остатки"><Stock state={state} office={office} /></Panel>
-                <Panel title="Экономика ПВЗ"><Finances state={state} role="pvz" office={office} /></Panel>
+                <Panel title="Остатки" scroll><Stock state={state} office={office} /></Panel>
+                <Panel title="Экономика ПВЗ" scroll><Finances state={state} role="pvz" office={office} /></Panel>
             </div>
         </>
     );
