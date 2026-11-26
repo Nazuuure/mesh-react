@@ -26,7 +26,7 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
 
     return (
         <>
-            <Hero title="Диспетчерская WB" description="Сгруппируйте заявки одного города или соберите рейс робота." />
+            <Hero title="Диспетчерская WB" description="Следите за автоматическими рейсами роверов, поставками с хаба и сбоями." />
             <div className={shared.columns}>
                 <RouteMap state={state} offset={offset} />
                 <RoverCameras state={state} />
@@ -51,8 +51,8 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
             </Panel>
             <Panel title="Рейсы роботов" scroll>
                 <p className={shared.muted}>
-                    Багажник {num(rover.liters)} л · груз до {rover.maxKg} кг · от {rover.minUnits} упаковок
-                    · рекомендуемая загрузка {rover.idealMin}–{rover.idealMax}
+                    Багажник {num(rover.liters)} л · груз до {rover.maxKg} кг · автоназначение от {rover.autoUnits} упаковок
+                    · окно сбора {rover.collectMilliseconds / 1000} с
                 </p>
                 {dispatcher.trips.length ? dispatcher.trips.map(trip => {
                     const courier = courierStatus(trip);

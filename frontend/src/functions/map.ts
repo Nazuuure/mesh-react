@@ -1,4 +1,4 @@
-import { routePosition } from '../../../model.mjs';
+import { demandAt, routePosition } from '../../../model.mjs';
 import type { MeshState, Place, Stop, Trip } from '../types';
 import { pickupPoints } from './format';
 import { activeTrips } from './logistics';
@@ -37,10 +37,8 @@ export function cityRoutes(state: MeshState, office: string | undefined, now: nu
 
 export function demandStats(state: MeshState, points: Place[], category: string) {
     return points.map(point => {
-        const history = state.history.find(row => row.place === point.id && row.category === category)?.count ?? 0;
-        const recent = state.orders.filter(order => order.to === point.id &&
-            state.products.find(item => item.id === order.product)?.category === category).length;
-        return { point, history, recent, count: history + recent };
+        const { history, orders, count } = demandAt(state, point.id, category);
+        return { point, history, recent: orders, count };
     }).toSorted((left, right) => right.count - left.count);
 }
 

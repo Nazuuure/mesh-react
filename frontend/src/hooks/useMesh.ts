@@ -76,8 +76,9 @@ export function useMesh(role: Role) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...action, version: latest.current.version }),
             });
-            receive(await readState(response));
-            setMessage('Готово');
+            const next = await readState(response);
+            receive(next);
+            setMessage(next.notice ?? 'Готово');
             return true;
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Действие не выполнено');

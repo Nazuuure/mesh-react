@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compareRoutes, profitBoundary } from './economics.mjs';
-import { apply, product, seed, space } from './model.mjs';
+import { apply, product, scheduleRovers, seed, space } from './model.mjs';
 
 const scenario = {
     units: 8, unitLiters: 1, liters: 8, meshDays: 7, hubDays: 7,
@@ -174,4 +174,65 @@ test('Legacy shipments keep stock consistent when their first receipt uses the n
     assert.equal(product(legacy, 3).stock.p1, 0);
     assert.equal(entry.storage, 28);
     assert.equal(entry.saving, 0);
+});
+
+test('Automatic rover waits seven seconds from the sixth compatible unit and collects more', () => {
+    const state = seed();
+    const transfer = qty => apply(state, { type: 'transfer', product: 2, place: 'p2', to: 'p1', qty });
+    transfer(5);
+    assert.equal(scheduleRovers(state, 1000), false);
+    transfer(1);
+    assert.equal(scheduleRovers(state, 2000), true);
+    assert.deepEqual(state.dispatchWindows.p2, { since: 2000, units: 6 });
+
+    transfer(1);
+    assert.equal(scheduleRovers(state, 5000), true);
+    assert.equal(state.dispatchWindows.p2.since, 2000);
+    assert.equal(state.dispatchWindows.p2.units, 7);
+    assert.equal(scheduleRovers(state, 8999), false);
+    assert.equal(state.trips.length, 0);
+    assert.equal(scheduleRovers(state, 9000), true);
+    const trip = state.trips[0];
+    assert.equal(trip.status, 'Погрузка');
+    assert.equal(trip.ids.length, 3);
+    assert.equal(product(state, 2).stock.p2, 12);
+    assert.equal(scheduleRovers(state, 12000), false);
+    apply(state, { type: 'ship', request: trip.ids[0], place: 'p2' }, 12000);
+    assert.equal(product(state, 2).stock.p2, 5);
+    assert.equal(trip.status, 'В пути');
+});
+
+test('The scheduler leaves heavy cargo queued and waits for a free rover', () => {
+    const state = seed();
+    apply(state, { type: 'product', name: 'Тяжёлый груз', category: 'Дом', place: 'p2',
+        dims: [10,10,10], qty: 6, weightKg: 10, price: 100 });
+    const heavy = state.products.at(-1);
+    apply(state, { type: 'transfer', product: heavy.id, place: 'p2', to: 'p1', qty: 6 });
+    apply(state, { type: 'transfer', product: 2, place: 'p2', to: 'p1', qty: 6 });
+    state.trips.push({ id: 1, robot: 'R-01', status: 'В пути' }, { id: 2, robot: 'R-02', status: 'В пути' });
+    scheduleRovers(state, 1000);
+    assert.equal(scheduleRovers(state, 8000), false);
+    state.trips[0].status = 'Завершён';
+    assert.equal(scheduleRovers(state, 8001), true);
+    assert.equal(state.trips.at(-1).robot, 'R-01');
+    assert.equal(state.requests[0].status, 'Новая');
+    assert.equal(state.requests[1].status, 'Погрузка');
+});
+
+test('Seller destination follows category demand, city, capacity, and excludes the source', () => {
+    const state = seed();
+    for (const row of state.history.filter(row => row.category === 'Дом')) {
+        row.count = { p1: 1, p2: 100, p3: 10, p4: 200, p5: 5 }[row.place];
+    }
+    apply(state, { type: 'capacity', place: 'p2', value: space(state, 'p2').used });
+    const listed = apply(state, { type: 'product', name: 'Выбор по спросу', category: 'Дом',
+        city: 'Йошкар-Ола', dims: [10,10,10], qty: 1, price: 100 });
+    const item = state.products.at(-1);
+    assert.match(listed, /Парковый/);
+    assert.deepEqual(item.stock, { p3: 1 });
+    apply(state, { type: 'restock', product: item.id, city: 'Йошкар-Ола', qty: 1 });
+    assert.deepEqual(item.stock, { p3: 2 });
+    apply(state, { type: 'transfer', product: item.id, place: 'p3', city: 'Йошкар-Ола', qty: 1 });
+    assert.equal(state.requests.at(-1).to, 'p1');
+    assert.throws(() => apply(state, { type: 'restock', product: item.id, city: 'Другой город', qty: 1 }), /Выберите город/);
 });

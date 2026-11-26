@@ -39,7 +39,6 @@ export function dispatchGroups(state: MeshState) {
     const groups = Object.groupBy(queue, request => request.kind === 'Робот'
         ? 'robot-' + request.from
         : 'hub-' + state.places.find(place => place.id === request.to)?.city);
-    const availableRobots = ['R-01', 'R-02'].filter(robot => !activeTrips(state).some(trip => trip.robot === robot));
 
     return Object.entries(groups).flatMap(([key, requests]) => {
         if (!requests?.length) return [];
@@ -52,7 +51,6 @@ export function dispatchGroups(state: MeshState) {
             key,
             isHub,
             requests,
-            availableRobots,
             title: isHub ? 'Поставка в ' + city : 'Рейс из ' + pointName(state, first.from),
             pickupOptions: offices.map(office => [office.id, office.name + ' · свободно ' + num(space(state, office.id).free) + ' л'] as const),
         }];
@@ -66,7 +64,7 @@ export function loadSummary(state: MeshState, requests: Shipment[], isHub: boole
     if (!units) return '';
     const base = 'Выбрано ' + units + ' шт. · ' + num(cargoLiters(state, requests)) + ' л';
     if (isHub) return base;
-    const range = units < rover.minUnits ? 'недостаточно упаковок'
+    const range = units < rover.autoUnits ? 'ниже порога автосбора'
         : units < rover.idealMin ? 'ниже рекомендуемой загрузки'
         : units > rover.idealMax ? 'выше рекомендуемой загрузки' : 'рекомендуемая загрузка';
     const liters = cargoLiters(state, requests);
@@ -77,7 +75,7 @@ export function loadSummary(state: MeshState, requests: Shipment[], isHub: boole
         stops: new Set(requests.map(request => request.to)).size,
         meshWait: wait, hubWait: wait + rates.hubWaitSeconds,
     });
-    const limit = roverLimit(units, liters, kilograms);
+    const limit = units < rover.autoUnits ? 'Автосбор от ' + rover.autoUnits + ' уп.' : roverLimit(units, liters, kilograms);
     const recommendation = limit
         ? (comparison.hubSeconds <= pilotDefaults.deadline ? 'hub' : 'neither')
         : comparison.recommendation;

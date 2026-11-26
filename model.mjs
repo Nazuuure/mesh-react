@@ -21,6 +21,8 @@ export const rover = {
   liters: 61,
   maxKg: 25,
   minUnits: 3,
+  autoUnits: 6,
+  collectMilliseconds: 7000,
   idealMin: 8,
   idealMax: 14
 }
@@ -87,6 +89,23 @@ export function source(s,p,target){
   return s.places.filter(q=>freeStock(s,p,q.id)>0).sort((a,b)=>rank(a)-rank(b))[0]
   function rank(q){return q.id===target?0:q.id==='hub'?100:q.city===dest.city?1+distance(q,dest):200+distance(q,dest)}
 }
+export function demandAt(s, point, category) {
+  const history=s.history.find(row=>row.place===point&&row.category===category)?.count??0
+  const orders=s.orders.filter(o=>o.to===point&&o.status!=='Возвращён'&&product(s,o.product)?.category===category).length
+  return {history,orders,count:history+orders}
+}
+
+function demandDestination(s, city, category, liters, excluded) {
+  check(s.places.some(q=>q.id!=='hub'&&q.city===city),'Выберите город')
+  const candidates=s.places
+    .filter(q=>q.id!=='hub'&&q.city===city&&q.id!==excluded)
+    .map(point=>({point,free:space(s,point.id).free,count:demandAt(s,point.id,category).count}))
+    .filter(row=>row.free+1e-8>=liters)
+    .sort((a,b)=>b.count-a.count||b.free-a.free||a.point.id.localeCompare(b.point.id))
+  check(candidates.length,'В выбранном городе нет ПВЗ, куда помещается вся партия')
+  return candidates[0].point
+}
+
 function request(s,p,qty,from,to,order,now){
   const trunk=from==='hub'||place(s,from).city!==place(s,to).city
   const r={id:s.next++,product:p.id,qty,from,to,order,purpose:order?'pickup':'storage',created:s.day,queuedAt:now,status:'Новая',kind:trunk?'Магистраль':'Робот',target:null,tried:[],departed:false}
@@ -96,7 +115,8 @@ function volume(s,rows){return rows.reduce((a,r)=>a+product(s,r.product).liters*
 function suggest(s,rows,id){
   const city=place(s,rows[0].to).city
   const fits=p=>p&&p.id!=='hub'&&p.city===city&&space(s,p.id).free+1e-8>=volume(s,rows.filter(r=>r.purpose!=='pickup'))&&rows.every(r=>!r.tried.includes(p.id)&&r.from!==p.id)
-  const dest=id?place(s,id):s.places.find(fits)
+  const preferred=rows.every(r=>!r.order&&r.to===rows[0].to)?place(s,rows[0].to):null
+  const dest=id?place(s,id):fits(preferred)?preferred:s.places.find(fits)
   if(id)check(fits(dest),'У пункта недостаточно места, другой город или он уже отклонил партию')
   for(const r of rows){r.target=dest?.id||null;r.status=dest?'Согласование':'Ожидает места';r.batch=rows[0].id}
 }
@@ -140,24 +160,30 @@ export function apply(s,a,now=Date.now()){
  const rows=s.requests.filter(r=>Array.isArray(a.ids)&&a.ids.includes(r.id))
  switch(a.type){
  case 'product': {
-   check(q&&categories.includes(a.category)&&typeof a.name==='string'&&a.name.trim().length>0&&a.name.length<=80,'Проверьте карточку товара')
+   check(categories.includes(a.category)&&typeof a.name==='string'&&a.name.trim().length>0&&a.name.length<=80,'Проверьте карточку товара')
    const liters=packingLiters(a.dims),qty=number(a.qty,1,10000,true)
-   check(space(s,q.id).free>=liters*qty,'Недостаточно места')
-   check(Array.isArray(a.dims)&&a.dims.length===3,'Введите габариты')
-   s.products.push({id:s.next++,name:a.name.trim(),category:a.category,price:number(a.price,.01,1e7),liters,weightKg:number(a.weightKg ?? 1,.001,1e6),dims:a.dims.map(v=>number(v,.01,1000)),stock:{[q.id]:qty},icon:'📦',day:s.day});break
+   const destination=a.city==null?q:demandDestination(s,a.city,a.category,liters*qty)
+   check(destination&&space(s,destination.id).free+1e-8>=liters*qty,'Недостаточно места')
+   s.products.push({id:s.next++,name:a.name.trim(),category:a.category,price:number(a.price,.01,1e7),liters,weightKg:number(a.weightKg ?? 1,.001,1e6),dims:a.dims.map(v=>number(v,.01,1000)),stock:{[destination.id]:qty},icon:'📦',day:s.day})
+   return a.city==null?undefined:'Товар размещён в ПВЗ «'+destination.name+'»'
  }
  case 'restock': {
-   check(p&&q,'Выберите товар и точку размещения')
+   check(p&&(a.city!=null||q),'Выберите товар и точку размещения')
    const qty=number(a.qty,1,10000,true)
-   check(space(s,q.id).free+1e-8>=p.liters*qty,'Недостаточно места')
-   addStock(p,q.id,[{quantity:qty,storedDays:0}],s.day)
-   break
+   const destination=a.city==null?q:demandDestination(s,a.city,p.category,p.liters*qty)
+   check(destination&&space(s,destination.id).free+1e-8>=p.liters*qty,'Недостаточно места')
+   addStock(p,destination.id,[{quantity:qty,storedDays:0}],s.day)
+   return a.city==null?undefined:'Остаток пополнен в ПВЗ «'+destination.name+'»'
  }
  case 'capacity':check(q&&q.id!=='hub','Выберите ПВЗ');{const v=number(a.value,0,1e6);check(v>=q.capacity-space(s,q.id).free,'Объём занят товаром или обещан входящей партии');q.capacity=v}break
  case 'transfer':{
-   check(q&&to&&to.id!=='hub'&&p&&q.id!==to.id,'Проверьте пункты отправки и назначения')
-   const qty=number(a.qty,1,10000,true);check(freeStock(s,p,q.id)>=qty,'Недостаточно свободного товара')
-   request(s,p,qty,q.id,to.id,null,now);break
+   check(q&&p,'Выберите товар и пункт отправки')
+   const qty=number(a.qty,1,10000,true)
+   check(freeStock(s,p,q.id)>=qty,'Недостаточно свободного товара')
+   const destination=a.city==null?to:demandDestination(s,a.city,p.category,p.liters*qty,q.id)
+   check(destination&&destination.id!=='hub'&&destination.id!==q.id,'Проверьте пункт назначения')
+   request(s,p,qty,q.id,destination.id,null,now)
+   return a.city==null?undefined:'Заявка создана для ПВЗ «'+destination.name+'»'
  }
  case 'order':{
    check(p&&to&&to.id!=='hub','Выберите товар и пункт выдачи');const src=source(s,p,to.id);check(src,'Товар закончился')
@@ -318,6 +344,57 @@ export function apply(s,a,now=Date.now()){
  }
 }
 
+function compatibleLoad(s, requests) {
+  let liters=0, kilograms=0, units=0
+  const held=new Map()
+  const rows=[]
+  for(const shipment of requests){
+    const item=product(s,shipment.product)
+    const dest=place(s,shipment.to)
+    if(!item||!dest||dest.city!==place(s,shipment.from)?.city)continue
+    const added=item.liters*shipment.qty
+    const weight=(item.weightKg??1)*shipment.qty
+    if(liters+added>rover.liters+1e-8||kilograms+weight>rover.maxKg+1e-8)continue
+    if(shipment.purpose!=='pickup'){
+      const reserved=(held.get(dest.id)??0)+added
+      if(reserved>space(s,dest.id).free+1e-8)continue
+      held.set(dest.id,reserved)
+    }
+    rows.push(shipment)
+    liters+=added
+    kilograms+=weight
+    units+=shipment.qty
+  }
+  return {rows,units}
+}
+
+export function scheduleRovers(s,now) {
+  const previous=s.dispatchWindows??{}
+  const windows={}
+  let assigned=false
+  const waiting=s.requests.filter(r=>r.kind==='Робот'&&r.status==='Новая').sort((a,b)=>a.id-b.id)
+  const groups=Map.groupBy(waiting,r=>r.from)
+  const robots=['R-01','R-02'].filter(robot=>!s.trips.some(t=>t.robot===robot&&!['Сбой','Завершён'].includes(t.status)))
+  const origins=[...groups.keys()].sort((a,b)=>(previous[a]?.since??now)-(previous[b]?.since??now))
+
+  for(const origin of origins){
+    const {rows,units}=compatibleLoad(s,groups.get(origin))
+    if(units<rover.autoUnits)continue
+    const since=previous[origin]?.since??now
+    if(now-since>=rover.collectMilliseconds&&robots.length){
+      prepareTrip(s,{robot:robots.shift()},rows)
+      assigned=true
+    }else{
+      windows[origin]={since,units}
+    }
+  }
+
+  if(!assigned&&Object.keys(previous).length===Object.keys(windows).length
+    &&Object.entries(windows).every(([origin,window])=>previous[origin]?.since===window.since&&previous[origin].units===window.units))return false
+  s.dispatchWindows=windows
+  return true
+}
+
 function prepareTrip(s,a,rows){
    check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'&&r.from===rows[0].from),'Выберите новые заявки из одного ПВЗ')
    const qty=rows.reduce((n,r)=>n+r.qty,0)
@@ -326,7 +403,7 @@ function prepareTrip(s,a,rows){
    check(loadKg(s,rows) <= rover.maxKg + 1e-8, 'Масса груза превышает '+rover.maxKg+' кг')
    check(['R-01','R-02'].includes(a.robot)&&!s.trips.some(t=>t.robot===a.robot&&!['Сбой','Завершён'].includes(t.status)),'Робот занят')
    const stops=[...new Set(rows.map(r=>r.to))],route=[rows[0].from]
-   for(const id of stops)check(space(s,id).free>=volume(s,rows.filter(r=>r.to===id&&r.purpose!=='pickup')),'Нет места в пункте назначения')
+   for(const id of stops)check(space(s,id).free+1e-8>=volume(s,rows.filter(r=>r.to===id&&r.purpose!=='pickup')),'Нет места в пункте назначения')
    while(stops.length){const here=place(s,route.at(-1));stops.sort((a,b)=>distance(here,place(s,a))-distance(here,place(s,b)));route.push(stops.shift())}
    const trip={id:s.next++,robot:a.robot,status:stages[0],route,ids:rows.map(r=>r.id)};s.trips.push(trip)
    for(const r of rows){r.status=trip.status;r.target=r.to;r.cost=rates.roverTrip*r.qty/qty}

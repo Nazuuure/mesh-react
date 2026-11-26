@@ -1,3 +1,4 @@
+import { rover } from '../../../../model.mjs';
 import { itemName, pointName } from '../../functions/format';
 import type { DispatchGroup } from '../../functions/logistics';
 import { useDispatchForm } from '../../hooks/useDispatchForm';
@@ -35,20 +36,21 @@ export function DispatchForm({ state, send, busy, group, notify, offset }: Props
                         </span>
                     </label>
                 ))}
-                <div className={shared.form}>
-                    <SelectField label="Назначение" name="purpose" options={purposes} />
-                    {group.isHub ? (
+                {group.isHub ? (
+                    <div className={shared.form}>
+                        <SelectField label="Назначение" name="purpose" options={purposes} />
                         <SelectField label="Пункт приёмки" name="place"
                             options={[[ '', 'Подобрать по вместимости' ], ...group.pickupOptions]} />
-                    ) : (
-                        <SelectField label="Свободный робот" name="robot"
-                            options={group.availableRobots.map(robot => [robot, robot])} />
-                    )}
-                    <Button type="submit" primary disabled={busy || (!group.isHub && !group.availableRobots.length)}>
-                        {group.isHub ? 'Запросить приёмку' : 'Построить маршрут и начать погрузку'}
-                    </Button>
-                    {!group.isHub && <Button type="submit" name="fallback" disabled={busy}>Отправить через хаб</Button>}
-                </div>
+                        <Button type="submit" primary disabled={busy}>Запросить приёмку</Button>
+                    </div>
+                ) : (
+                    <>
+                        <p>{form.window
+                            ? 'В партии ' + form.window.units + ' уп. · ' + (form.seconds ? 'сбор ещё ' + form.seconds + ' с' : 'ожидает назначения ровера')
+                            : 'Автосбор совместимой партии от ' + rover.autoUnits + ' упаковок'}</p>
+                        <Button type="submit" disabled={busy || !form.selected.length}>Отправить выбранное через хаб</Button>
+                    </>
+                )}
                 {form.summary && <p className={shared.muted}>{form.summary}</p>}
             </form>
         </Entry>

@@ -6,7 +6,7 @@ import { useFormAction } from './useFormAction';
 
 const initialDimensions = ['10', '10', '20'];
 
-export function useListingForm(send: SendAction) {
+export function useListingForm(send: SendAction, city: string) {
     const [dimensions, setDimensions] = useState(initialDimensions);
     let volume: string;
     try {
@@ -21,7 +21,7 @@ export function useListingForm(send: SendAction) {
         category: formValue(form, 'category'),
         price: formValue(form, 'price'),
         qty: formValue(form, 'qty'),
-        place: formValue(form, 'place'),
+        city,
         weightKg: formValue(form, 'weightKg'),
         dims: dimensions,
     }));

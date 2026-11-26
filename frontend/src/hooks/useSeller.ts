@@ -17,15 +17,15 @@ export function useSeller(state: MeshState, send: SendAction) {
         type: 'restock',
         product: formValue(form, 'product'),
         qty: formValue(form, 'qty'),
-        place: formValue(form, 'place'),
+        city,
     }));
     const transfer = useFormAction(send, form => ({
         type: 'transfer',
         product: formValue(form, 'product'),
         qty: formValue(form, 'qty'),
         place: formValue(form, 'place'),
-        to: formValue(form, 'to'),
+        city,
     }));
 
-    return { points, cities, city, setCity, category, setCategory, product, setProduct, sources, restock, transfer };
+    return { cities, city, setCity, category, setCategory, product, setProduct, sources, restock, transfer };
 }

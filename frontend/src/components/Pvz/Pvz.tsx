@@ -58,7 +58,7 @@ export function Pvz(props: CabinetProps) {
                             {trip && <strong>Рейс №{trip.id}</strong>}
                             {items.map(shipment => <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset} />)}
                             <Button primary disabled={busy} onClick={() => void send({ type: 'ship', request: items[0].id, place: office })}>
-                                Подтвердить отправку
+                                Подтвердить погрузку и отправку
                             </Button>
                         </Entry>
                     )) : <p>Грузов к отправке нет</p>}

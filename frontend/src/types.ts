@@ -92,14 +92,17 @@ export interface MeshState {
     day: number;
     version: number;
     serverNow: number;
+    dispatchWindows?: Record<string, { since: number; units: number }>;
+    notice?: string;
 }
 
 export type Action =
     | { type: 'order'; product: number; to: string }
     | { type: 'choice'; order: number; accept: boolean }
-    | { type: 'product'; name: string; category: string; price: string; dims: string[]; qty: string; place: string; weightKg: string }
-    | { type: 'restock' | 'transfer'; product: string; qty: string; place: string; to?: string }
-    | { type: 'offer' | 'trip' | 'viaHub'; ids: number[]; purpose: string; place: string; robot: string }
+    | { type: 'product'; name: string; category: string; price: string; dims: string[]; qty: string; city: string; weightKg: string }
+    | { type: 'restock'; product: string; qty: string; city: string }
+    | { type: 'transfer'; product: string; qty: string; place: string; city: string }
+    | { type: 'offer' | 'viaHub'; ids: number[]; purpose: string; place: string }
     | { type: 'reply'; batch: number; place: string; accept: boolean }
     | { type: 'ship' | 'receive'; request: number; place: string }
     | { type: 'issue' | 'return'; order: number; place: string }

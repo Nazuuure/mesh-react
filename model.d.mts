@@ -7,10 +7,13 @@ export const rover: {
     liters: number;
     maxKg: number;
     minUnits: number;
+    autoUnits: number;
+    collectMilliseconds: number;
     idealMin: number;
     idealMax: number;
 };
 
+export function demandAt(state: MeshState, point: string, category: string): { history: number; orders: number; count: number };
 export function freeStock(state: MeshState, item: Product, place: string): number;
 export function source(state: MeshState, item: Product, target: string): Place | undefined;
 export function packingLiters(dimensions: readonly (string | number)[]): number;

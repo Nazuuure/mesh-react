@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { rover } from '../../../model.mjs';
 import type { FormEvent } from 'react';
 import { formValue } from '../functions/format';
 import { loadSummary } from '../functions/logistics';
@@ -23,18 +24,17 @@ export function useDispatchForm(state: MeshState, group: DispatchGroup, send: Se
         }
 
         const form = new FormData(event.currentTarget);
-        const submitter = (event.nativeEvent as SubmitEvent).submitter;
-        const fallback = submitter?.getAttribute('name') === 'fallback';
-        const type = group.isHub ? 'offer' : fallback ? 'viaHub' : 'trip';
+        const type = group.isHub ? 'offer' : 'viaHub';
         const complete = await send({
             type,
             ids: requests.map(request => request.id),
             purpose: formValue(form, 'purpose'),
             place: formValue(form, 'place'),
-            robot: formValue(form, 'robot'),
         });
         if (complete) setSelected([]);
     }
 
-    return { selected, select, submit, summary: loadSummary(state, requests, group.isHub, now) };
+    const window = state.dispatchWindows?.[group.requests[0].from];
+    const seconds = window ? Math.max(0, Math.ceil((window.since + rover.collectMilliseconds - now) / 1000)) : null;
+    return { selected, select, submit, window, seconds, summary: loadSummary(state, requests, group.isHub, now) };
 }
