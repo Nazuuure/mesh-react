@@ -1,0 +1,26 @@
+.button {
+    max-width: 100%;
+    padding: 9px 13px;
+    border: 1px solid #d5ceda;
+    border-radius: 10px;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+    border-color: var(--purple);
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.primary {
+    border-color: transparent;
+    background: var(--purple);
+    color: #fff;
+}

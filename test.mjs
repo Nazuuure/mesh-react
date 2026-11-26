@@ -151,7 +151,7 @@ test('Rover enforces independent volume and payload limits',()=>{
  assert.equal(s.trips.length,1)
 })
 
-test('Stuck rover alerts the nearest office and resumes after courier assistance',()=>{
+test('WB sends help to a stuck rover and then resumes its trip',()=>{
  const s=seed()
  apply(s,{type:'transfer',product:1,place:'p1',to:'p2',qty:3})
  const request=s.requests[0].id
@@ -159,11 +159,21 @@ test('Stuck rover alerts the nearest office and resumes after courier assistance
  const trip=s.trips[0].id
  apply(s,{type:'ship',request,place:'p1'},1000)
  apply(s,{type:'stuck',trip},9000)
- assert.equal(s.trips[0].incident.office,'p2')
+ assert.equal(s.trips[0].incident.dispatchedAt,null)
+ assert.equal(s.trips[0].assistanceCost,undefined)
  assert.throws(()=>apply(s,{type:'stuck',trip},9500))
+ assert.throws(()=>apply(s,{type:'rescue',trip},10000),/Сначала отправьте/)
+ apply(s,{type:'dispatchCourier',trip},11000)
+ assert.equal(s.trips[0].incident.dispatchedAt,11000)
+ assert.equal(s.trips[0].assistanceCost,60)
+ assert.throws(()=>apply(s,{type:'dispatchCourier',trip},12000),/уже отправлен/)
  assert.throws(()=>apply(s,{type:'receive',request,place:'p2'},15000))
- assert.throws(()=>apply(s,{type:'rescue',trip,place:'p1'},15000))
- apply(s,{type:'rescue',trip,place:'p2'},15000)
+ const legacy=structuredClone(s)
+ delete legacy.trips[0].incident.dispatchedAt
+ assert.throws(()=>apply(legacy,{type:'dispatchCourier',trip},14500),/уже отправлен/)
+ apply(legacy,{type:'rescue',trip},15000)
+ assert.equal(legacy.trips[0].incident.resumedAt,15000)
+ apply(s,{type:'rescue',trip},15000)
  assert.throws(()=>apply(s,{type:'receive',request,place:'p2'},16999))
  apply(s,{type:'receive',request,place:'p2'},17000)
  assert.equal(s.trips[0].status,'Завершён')

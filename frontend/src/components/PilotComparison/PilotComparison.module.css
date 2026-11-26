@@ -1,0 +1,35 @@
+.fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+    gap: 10px;
+}
+
+.scroller {
+    overflow-x: auto;
+}
+
+.table {
+    width: min(660px, 100%);
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table th,
+.table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.table tbody tr:nth-last-child(2) {
+    font-weight: 700;
+}
+
+.details {
+    margin-top: 12px;
+}
+
+.details summary {
+    margin-bottom: 8px;
+    font-weight: 650;
+    cursor: pointer;
+}

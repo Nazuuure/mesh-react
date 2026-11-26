@@ -1,0 +1,12 @@
+.journey {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.journey progress {
+    width: min(120px, 42%);
+    accent-color: var(--purple);
+}
