@@ -28,6 +28,11 @@ export function Pvz(props: CabinetProps) {
                 <SelectField label="Работаю в пункте" options={placeOptions(pvz.points)} value={office}
                     onChange={event => pvz.select(event.target.value)} />
             </Hero>
+            {state.trips.filter(t=>t.status==='В пути').map(t=>{
+                if(t.awaitingCarrier && t.route[0]===office)return <Button key={t.id} disabled={busy} onClick={()=>void send({type:'confirmReturn',trip:t.id,place:office})}>Рейс №{t.id}: подтвердить фактический возврат груза</Button>
+                if(!t.awaitingCarrier && t.incident?.dispatchedAt!=null && t.incident.resumedAt==null && (t.incident.office??t.route[0])===office)return <Button key={t.id} disabled={busy} onClick={()=>void send({type:'rescue',trip:t.id,place:office})}>Курьер выслан к {t.robot} · подтвердить оказанную помощь</Button>
+                return null
+            })}
             <div className={shared.columns}>
                 <Panel title="Готовы к выдаче" scroll>
                     {ready.length ? ready.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)

@@ -64,7 +64,7 @@ export interface Trip {
     route: string[];
     ids: number[];
     status: 'Погрузка' | 'В пути' | 'Разгрузка' | 'Завершён' | 'Сбой';
-    incident?: { at: number; dispatchedAt?: number | null; resumedAt?: number };
+    incident?: { office?:string; at: number; dispatchedAt?: number | null; resumedAt?: number };
     awaitingCarrier?: boolean;
     assistanceCost?: number;
     failedTransport?: number;
@@ -113,7 +113,7 @@ export type Action =
     | {type:'shortage';request:number;place:string;missing:number}
     | { type: 'ship' | 'receive'; request: number; place: string; received?:number }
     | { type: 'issue' | 'return'; order: number; place: string }
-    | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure' | 'confirmReturn'; trip: number }
+    | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure' | 'confirmReturn'; trip: number; place?:string }
     | { type: 'capacity'; place: string; value: string }
     | { type: 'day' | 'reset' };
 

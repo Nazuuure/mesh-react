@@ -317,3 +317,19 @@ test('Partial receipt credits only counted packages and leaves the rest in trans
  assert.equal(p.stock.p2,3)
  assert.equal(s.trips[0].status,'Завершён')
 })
+
+test('Dispatch sends a timed-out singleton to the hub flow but waits for physical handover',async()=>{
+    const {scheduleDispatch}=await import('./model.mjs')
+    const s=seed()
+    apply(s,{type:'transfer',product:2,place:'p2',to:'p1',qty:1},1000)
+    const r=s.requests[0]
+    scheduleDispatch(s,60999)
+    assert.equal(r.status,'Новая')
+    scheduleDispatch(s,61000)
+    assert.equal(r.kind,'Магистраль')
+    assert.equal(r.status,'Согласование')
+    apply(s,{type:'reply',place:r.target,batch:r.batch,accept:true})
+    scheduleDispatch(s,70000)
+    assert.equal(r.status,'Погрузка')
+    assert.equal(r.departed,false)
+})

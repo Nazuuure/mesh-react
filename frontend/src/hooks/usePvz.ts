@@ -1,12 +1,12 @@
 import { space } from '../../../model.mjs';
-import { formValue, pickupPoints } from '../functions/format';
+import { formValue } from '../functions/format';
 import { officeQueues } from '../functions/logistics';
 import type { MeshState, SendAction } from '../types';
 import { useFormAction } from './useFormAction';
 import { usePickupPoint } from './usePickupPoint';
 
 export function usePvz(state: MeshState, send: SendAction) {
-    const points = pickupPoints(state);
+    const points = state.places;
     const [point, select] = usePickupPoint(points, 'pvz-office', 'p1');
     const capacity = useFormAction(send, form => ({
         type: 'capacity',

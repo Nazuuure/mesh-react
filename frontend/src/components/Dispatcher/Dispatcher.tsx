@@ -5,7 +5,6 @@ import { useDispatcher } from '../../hooks/useDispatcher';
 import shared from '../../styles/Shared.module.css';
 import type { CabinetProps } from '../../types';
 import { Button } from '../Button/Button';
-import { DispatchForm } from '../DispatchForm/DispatchForm';
 import { Entry } from '../Entry/Entry';
 import { Finances } from '../Finances/Finances';
 import { Hero } from '../Hero/Hero';
@@ -21,7 +20,7 @@ interface Props extends CabinetProps {
     notify: (message: string) => void;
 }
 
-export function Dispatcher({ state, send, busy, offset, notify }: Props) {
+export function Dispatcher({ state, send, busy, offset }: Props) {
     const dispatcher = useDispatcher(state, send);
 
     const pools=Map.groupBy(state.requests.filter(r=>isVanPool(state,r)),r=>r.from+"-"+r.to);
@@ -32,19 +31,6 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                 <RouteMap state={state} offset={offset} />
                 <RoverCameras state={state} />
             </div>
-            {dispatcher.hubLoads.length > 0 && (
-                <Panel title="Передача груза" scroll>
-                    {dispatcher.hubLoads.map(shipment => (
-                        <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset}>
-                            <div className={styles.ship}>
-                                <Button primary disabled={busy} onClick={() => void send({ type: 'ship', request: shipment.id, place: 'hub' })}>
-                                    Подтвердить отправку
-                                </Button>
-                            </div>
-                        </RequestCard>
-                    ))}
-                </Panel>
-            )}
             <details className={shared.panel}>
                 <summary>Координаты и расстояния между точками</summary>
                 <p>Демонстрационные координаты. Расстояние по прямой, км.</p>
@@ -59,19 +45,16 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                 {pools.size===0 && <p>Дальних заявок пока нет.</p>}
                 {Array.from(pools,([key,rows])=>{
                     const q=vanQuote(state,rows);
-                    const ids=rows.map(r=>r.id);
+
                     return <Entry key={key}>
                         <b>{pointName(state,rows[0].from)} → {pointName(state,rows[0].to)} · {num(q.km)} км</b>
                         <p>{q.units} уп. · вызов от {q.minimum} уп. · рейс {rub(q.fare)} · эффект к хабу {rub(q.saving)}</p>
-                        <Button disabled={busy || q.saving<=0} onClick={()=>void send({type:'van',ids})}>Вызвать Газель</Button>
-                        <Button disabled={busy} onClick={()=>void send({type:'viaHub',ids,place:'',purpose:'auto'})}>Через хаб</Button>
+
                     </Entry>
                 })}
             </Panel>
             <Panel title="Очередь заявок" scroll>
-                {dispatcher.groups.length ? dispatcher.groups.map(group => (
-                    <DispatchForm key={group.key} state={state} send={send} busy={busy} group={group} notify={notify} offset={offset} />
-                )) : <p>Новых заявок нет. Создайте перемещение у продавца или оформите заказ.</p>}
+                {dispatcher.groups.length ? dispatcher.groups.map(group => <Entry key={group.key}>{group.title} · заявок: {group.requests.length}</Entry>) : <p>Новых заявок нет. Создайте перемещение у продавца или оформите заказ.</p>}
             </Panel>
             <Panel title="Рейсы роботов" scroll>
                 <p className={shared.muted}>
@@ -98,20 +81,9 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                                             Симулировать застревание
                                         </Button>
                                     )}
-                                    {inTransit && courier === 'needed' && (
-                                        <Button primary disabled={busy} onClick={() => void send({ type: 'dispatchCourier', trip: trip.id })}>
-                                            Отправить курьера
-                                        </Button>
-                                    )}
-                                    {inTransit && courier === 'sent' && (
-                                        <>
-                                            <small>Курьер отправлен</small>
-                                            <Button primary disabled={busy} onClick={() => void send({ type: 'rescue', trip: trip.id })}>
-                                                Подтвердить помощь и продолжить рейс
-                                            </Button>
-                                        </>
-                                    )}
-                                    <Button disabled={busy} onClick={() => void send({ type: trip.awaitingCarrier?'confirmReturn':'failure', trip: trip.id })}>{trip.awaitingCarrier?'Перевозчик подтвердил возврат на базу':'Сообщить о сбое рейса'}</Button>
+                                    {courier==='sent' && <small>Курьер отправлен</small>}
+                                    {trip.awaitingCarrier ? <small>Ожидается подтверждение возврата на базе</small> :
+                                    <Button disabled={busy} onClick={()=>void send({type:'failure',trip:trip.id})}>Симулировать сбой</Button>}
                                 </div>
                             )}
                         </Entry>

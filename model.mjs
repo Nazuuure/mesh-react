@@ -316,7 +316,14 @@ export function apply(s,a,now=Date.now()){
      check(!trip.incident,'Симуляция уже проведена для этого рейса')
      const moving=shipments.filter(r=>r.status==='В пути' && now<r.eta)
      check(moving.length,'Ровер уже прибыл')
-     trip.incident={at:now,dispatchedAt:null}
+     const stops=trip.route.map((id,i)=>{
+       const p=place(s,id)
+       return [p.x,p.y,i?shipments.find(r=>r.target===id).eta:shipments[0].sentAt]
+     })
+     const pos=routePosition(stops,now)
+     const dist=p=>Math.hypot(p.x-pos.x,p.y-pos.y)
+     const nearest=s.places.filter(p=>p.id!=='hub'&&p.city===place(s,trip.route[0]).city).sort((a,b)=>dist(a)-dist(b))[0]
+     trip.incident={at:now,dispatchedAt:null,office:nearest.id}
      for(const shipment of moving)shipment.pausedAt=now
      break
    }
@@ -495,6 +502,37 @@ export function vanQuote(s, rows) {
 export function isVanPool(s,r) {
   return r.kind==='Робот' && r.status==='Новая' &&
     place(s,r.from).city===place(s,r.to).city && localKm(place(s,r.from),place(s,r.to))>roverRadiusKm
+}
+
+// No physical handovers are inferred by this scheduler.
+export function scheduleDispatch(s,now){
+ let changed=scheduleRovers(s,now)
+ const pools=Map.groupBy(s.requests.filter(r=>isVanPool(s,r)),r=>r.from+'-'+r.to)
+ for(const rows of pools.values()){
+   if(vanQuote(s,rows).saving<=0)continue
+   if(space(s,rows[0].to).free<volume(s,rows.filter(r=>r.purpose!=='pickup')))continue
+   apply(s,{type:'van',ids:rows.map(r=>r.id)},now)
+   changed=true
+ }
+ for(const r of s.requests){
+   if(r.kind==='Робот' && r.status==='Новая' && r.queuedAt==null){r.queuedAt=now;changed=true}
+   if(r.kind==='Робот' && r.status==='Новая' && now-r.queuedAt>=60000){
+     apply(s,{type:'viaHub',ids:[r.id]},now)
+     changed=true
+   }
+   if(r.kind==='Магистраль' && ['Новая','Ожидает места'].includes(r.status)){
+     const old=r.status
+     suggest(s,[r])
+     if(r.status!==old)changed=true
+   }
+ }
+ for(const trip of s.trips){
+   if(trip.status==='В пути' && !trip.awaitingCarrier && trip.incident?.dispatchedAt===null){
+     apply(s,{type:'dispatchCourier',trip:trip.id},now)
+     changed=true
+   }
+ }
+ return changed
 }
 
 export function scheduleRovers(s,now) {

@@ -1,6 +1,6 @@
 import http from 'node:http'
 import {readFile} from 'node:fs/promises'
-import {apply,syncGeography,expandCatalog,scheduleRovers,seed} from './model.mjs'
+import {apply,syncGeography,expandCatalog,scheduleDispatch,seed} from './model.mjs'
 let load,save,close
 if(process.env.DATABASE_URL){
   const {Client}=await import('pg')
@@ -17,7 +17,7 @@ if(process.env.DATABASE_URL){
   load=()=>JSON.parse(db.prepare('SELECT body FROM demo WHERE id=1').get().body)
   save=s=>db.prepare('UPDATE demo SET body=? WHERE id=1').run(JSON.stringify(s));close=()=>db.close()
 }
-const roles={buyer:['order','choice'],seller:['product','restock','transfer'],wb:['van','offer','viaHub','stuck','dispatchCourier','rescue','failure','confirmReturn','ship','day','reset'],pvz:['shortage','reply','ship','receive','issue','return','capacity']}
+const roles={buyer:['order','choice'],seller:['product','restock','transfer'],wb:['stuck','failure','day','reset'],pvz:['confirmReturn','rescue','shortage','reply','ship','receive','issue','return','capacity']}
 const names={buyer:'Покупатель',seller:'Продавец',wb:'Диспетчер WB',pvz:'Сотрудник ПВЗ'}
 const base=Number(process.env.PORT||8000)
 const initial=await load()
@@ -46,7 +46,7 @@ const scheduler=setInterval(()=>{
  scheduling=true
  enqueue(async()=>{
    const state=tick(await load())
-   if(!scheduleRovers(state,Date.now()))return
+   if(!scheduleDispatch(state,Date.now()))return
    state.version++
    await save(state)
  }).catch(error=>console.error('Планировщик рейсов:',error.message))
@@ -66,15 +66,20 @@ const server=http.createServer(async(req,res)=>{
     if(req.headers['content-type']?.split(';')[0]!=='application/json')return send(415,{error:'Нужен JSON'})
     let body='';for await(const chunk of req){body+=chunk;if(body.length>32000)return send(413,{error:'Слишком большой запрос'})}
     const action=JSON.parse(body)
-    if(!roles[role].includes(action.type)||(action.type==='ship'&&((role==='wb')!==(action.place==='hub'))))return send(403,{error:'Действие выполняется на сайте соответствующего участника'})
+    if(!roles[role].includes(action.type))return send(403,{error:'Действие выполняется на сайте соответствующего участника'})
     const result=await enqueue(async()=>{
       let s=tick(await load())
       if(action.version!==s.version)throw Error('Данные изменились. Обновите экран и повторите действие')
       const version=s.version
       const now=Date.now()
+      if(['rescue','confirmReturn'].includes(action.type)){
+        const trip=s.trips.find(t=>t.id===Number(action.trip))
+        const office=action.type==='rescue'?(trip?.incident?.office??trip?.route[0]):trip?.route[0]
+        if(!office||office!==action.place)throw Error('Подтвердите событие в назначенном пункте')
+      }
       let notice
       if(action.type==='reset')s={...seed(),clockAt:now};else notice=apply(s,action,now)
-      scheduleRovers(s,now)
+      scheduleDispatch(s,now)
       s.version=version+1
       await save(s)
       return {...respond(s),notice}
