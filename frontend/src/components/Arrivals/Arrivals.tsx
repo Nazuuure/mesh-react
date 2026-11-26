@@ -15,7 +15,7 @@ export function Arrivals({ arrivals, office, state, offset, busy, send }: Props)
     return arrivals.map(shipment => (
         <RequestCard key={shipment.id} state={state} shipment={shipment} offset={offset}>
             <div className={styles.action}>
-                {shipment.pausedAt != null ? <small>Ровер ожидает курьера</small>
+                {shipment.pausedAt != null ? <small>Рейс приостановлен</small>
                     : shipment.status === 'Погрузка' ? <small>Ожидает отправки</small>
                     : (
                         <Button primary disabled={busy || now < (shipment.eta ?? 0)}

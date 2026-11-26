@@ -13,7 +13,6 @@ import { OrderCard } from '../OrderCard/OrderCard';
 import { Panel } from '../Panel/Panel';
 import { RequestCard } from '../RequestCard/RequestCard';
 import { RouteMap } from '../RouteMap/RouteMap';
-import { RoverCameras } from '../RoverCameras/RoverCameras';
 import { SelectField } from '../SelectField/SelectField';
 import { Stock } from '../Stock/Stock';
 
@@ -21,7 +20,7 @@ export function Pvz(props: CabinetProps) {
     const { state, send, busy, offset } = props;
     const pvz = usePvz(state, send);
     const office = pvz.point.id;
-    const { approvals, loads, arrivals, ready, history, incidents } = pvz.queues;
+    const { approvals, loads, arrivals, ready, history } = pvz.queues;
 
     return (
         <>
@@ -29,17 +28,6 @@ export function Pvz(props: CabinetProps) {
                 <SelectField label="Работаю в пункте" options={placeOptions(pvz.points)} value={office}
                     onChange={event => pvz.select(event.target.value)} />
             </Hero>
-            {incidents.map(trip => (
-                <Panel key={trip.id} title="Ровер застрял">
-                    <div role="status">
-                        <strong>{trip.robot} · рейс №{trip.id}</strong>
-                        <p>Из вашего ПВЗ выслан курьер. Место остановки отмечено на карте.</p>
-                        <Button primary disabled={busy} onClick={() => void send({ type: 'rescue', trip: trip.id, place: office })}>
-                            Курьер помог · продолжить рейс
-                        </Button>
-                    </div>
-                </Panel>
-            ))}
             <div className={shared.columns}>
                 <Panel title="Готовы к выдаче">
                     {ready.length ? ready.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)
@@ -80,7 +68,6 @@ export function Pvz(props: CabinetProps) {
                 </Panel>
             </div>
             <RouteMap state={state} office={office} offset={offset} />
-            <RoverCameras state={state} office={office} />
             <Panel title="Выданные заказы и возвраты">
                 {history.length ? history.map(order => <OrderCard key={order.id} {...props} order={order} office={office} />)
                     : <p>Выданных заказов нет</p>}

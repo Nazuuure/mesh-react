@@ -60,7 +60,7 @@ export interface Trip {
     route: string[];
     ids: number[];
     status: 'Погрузка' | 'В пути' | 'Разгрузка' | 'Завершён' | 'Сбой';
-    incident?: { office: string; at: number; resumedAt?: number };
+    incident?: { at: number; dispatchedAt?: number | null; resumedAt?: number };
     assistanceCost?: number;
     failedTransport?: number;
 }
@@ -103,8 +103,7 @@ export type Action =
     | { type: 'reply'; batch: number; place: string; accept: boolean }
     | { type: 'ship' | 'receive'; request: number; place: string }
     | { type: 'issue' | 'return'; order: number; place: string }
-    | { type: 'stuck' | 'failure'; trip: number }
-    | { type: 'rescue'; trip: number; place: string }
+    | { type: 'stuck' | 'dispatchCourier' | 'rescue' | 'failure'; trip: number }
     | { type: 'capacity'; place: string; value: string }
     | { type: 'day' | 'reset' };
 

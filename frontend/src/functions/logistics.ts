@@ -7,7 +7,12 @@ import { pilotDefaults, routeLabels, roverLimit } from './pilot';
 export const activeTrips = (state: MeshState) => state.trips.filter(trip =>
     ['Погрузка', 'В пути', 'Разгрузка'].includes(trip.status));
 
-export const visitsOffice = (trip: Trip, office: string) => trip.route.includes(office) || trip.incident?.office === office;
+export function courierStatus(trip: Trip) {
+    const incident = trip.incident;
+    if (!incident) return null;
+    if (incident.resumedAt != null) return 'helped';
+    return incident.dispatchedAt === null ? 'needed' : 'sent';
+}
 
 export const cargoLiters = (state: MeshState, requests: Shipment[]) => requests.reduce((total, request) =>
     total + (state.products.find(item => item.id === request.product)?.liters ?? 0) * request.qty, 0);
@@ -25,14 +30,9 @@ export function officeQueues(state: MeshState, office: string) {
         arrivals: inbound.filter(request => ['Погрузка', 'В пути', 'Разгрузка'].includes(request.status)),
         ready: state.orders.filter(order => order.loc === office && order.status === 'Готов к выдаче'),
         history: state.orders.filter(order => order.loc === office && ['Выдан', 'Возвращён'].includes(order.status)).toReversed(),
-        incidents: tripsForRescue(state, office),
     };
 }
 
-function tripsForRescue(state: MeshState, office: string) {
-    return activeTrips(state).filter(trip => trip.status === 'В пути' &&
-        trip.incident?.office === office && trip.incident.resumedAt == null);
-}
 
 export function dispatchGroups(state: MeshState) {
     const queue = state.requests.filter(request => ['Новая', 'Ожидает места'].includes(request.status));

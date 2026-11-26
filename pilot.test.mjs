@@ -132,7 +132,9 @@ test('A failed rover charges only the departed attempt and assigns courier cost 
     apply(state, { type: 'ship', request: shipment.id, place: 'p2' }, 5000);
     apply(state, { type: 'stuck', trip: trip.id }, 6000);
     assert.throws(() => apply(state, { type: 'stuck', trip: trip.id }, 6500));
-    apply(state, { type: 'rescue', trip: trip.id, place: trip.incident.office }, 7000);
+    assert.equal(order.assistanceCost, undefined);
+    apply(state, { type: 'dispatchCourier', trip: trip.id }, 6600);
+    apply(state, { type: 'rescue', trip: trip.id }, 7000);
     apply(state, { type: 'failure', trip: trip.id }, 7500);
     assert.equal(trip.failedTransport, 360);
     assert.equal(trip.assistanceCost, 60);

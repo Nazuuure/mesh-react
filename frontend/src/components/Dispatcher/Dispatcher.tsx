@@ -1,5 +1,6 @@
 import { rover } from '../../../../model.mjs';
 import { num, pointName, rub } from '../../functions/format';
+import { courierStatus } from '../../functions/logistics';
 import { useDispatcher } from '../../hooks/useDispatcher';
 import shared from '../../styles/Shared.module.css';
 import type { CabinetProps } from '../../types';
@@ -12,6 +13,7 @@ import { Panel } from '../Panel/Panel';
 import { PilotComparison } from '../PilotComparison/PilotComparison';
 import { RequestCard } from '../RequestCard/RequestCard';
 import { RouteMap } from '../RouteMap/RouteMap';
+import { RoverCameras } from '../RoverCameras/RoverCameras';
 import { Tag } from '../Tag/Tag';
 import styles from './Dispatcher.module.css';
 
@@ -25,7 +27,10 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
     return (
         <>
             <Hero title="Диспетчерская WB" description="Сгруппируйте заявки одного города или соберите рейс робота." />
-            <RouteMap state={state} offset={offset} />
+            <div className={shared.columns}>
+                <RouteMap state={state} offset={offset} />
+                <RoverCameras state={state} />
+            </div>
             {dispatcher.hubLoads.length > 0 && (
                 <Panel title="Передача груза">
                     {dispatcher.hubLoads.map(shipment => (
@@ -49,26 +54,45 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                     Багажник {num(rover.liters)} л · груз до {rover.maxKg} кг · от {rover.minUnits} упаковок
                     · рекомендуемая загрузка {rover.idealMin}–{rover.idealMax}
                 </p>
-                {dispatcher.trips.length ? dispatcher.trips.map(trip => (
-                    <Entry key={trip.id}>
-                        <div className={shared.row}><strong>{trip.robot} · рейс №{trip.id}</strong><Tag>{trip.status}</Tag></div>
-                        <p>{trip.route.map(id => pointName(state, id)).join(' → ')}</p>
-                        {trip.assistanceCost !== undefined && <p>Помощь курьера · {rub(trip.assistanceCost)}</p>}
-                        {!!trip.failedTransport && <p>Затраты на прерванную перевозку · {rub(trip.failedTransport)}</p>}
-                        {dispatcher.active.has(trip.id) && (
-                            <div className={shared.actions}>
-                                <small>Отправку подтверждает исходный пункт, получение — принимающий.</small>
-                                {trip.status === 'В пути' && !trip.incident && (
-                                    <Button disabled={busy} onClick={() => void send({ type: 'stuck', trip: trip.id })}>Симулировать застревание</Button>
-                                )}
-                                {trip.incident && (
-                                    <small>Курьер из {pointName(state, trip.incident.office)} {trip.incident.resumedAt ? 'подтвердил помощь' : 'выслан к роверу'}</small>
-                                )}
-                                <Button disabled={busy} onClick={() => void send({ type: 'failure', trip: trip.id })}>Сбой и возврат на базу</Button>
+                {dispatcher.trips.length ? dispatcher.trips.map(trip => {
+                    const courier = courierStatus(trip);
+                    const inTransit = trip.status === 'В пути';
+                    const stopped = inTransit && (courier === 'needed' || courier === 'sent');
+                    return (
+                        <Entry key={trip.id}>
+                            <div className={shared.row}>
+                                <strong>{trip.robot} · рейс №{trip.id}</strong>
+                                <Tag>{stopped ? 'Ровер застрял' : trip.status}</Tag>
                             </div>
-                        )}
-                    </Entry>
-                )) : <p>Рейсов пока нет</p>}
+                            <p>{trip.route.map(id => pointName(state, id)).join(' → ')}</p>
+                            {trip.assistanceCost !== undefined && <p>Помощь курьера · {rub(trip.assistanceCost)}</p>}
+                            {!!trip.failedTransport && <p>Затраты на прерванную перевозку · {rub(trip.failedTransport)}</p>}
+                            {dispatcher.active.has(trip.id) && (
+                                <div className={shared.actions}>
+                                    {inTransit && courier === null && (
+                                        <Button disabled={busy} onClick={() => void send({ type: 'stuck', trip: trip.id })}>
+                                            Симулировать застревание
+                                        </Button>
+                                    )}
+                                    {inTransit && courier === 'needed' && (
+                                        <Button primary disabled={busy} onClick={() => void send({ type: 'dispatchCourier', trip: trip.id })}>
+                                            Отправить курьера
+                                        </Button>
+                                    )}
+                                    {inTransit && courier === 'sent' && (
+                                        <>
+                                            <small>Курьер отправлен</small>
+                                            <Button primary disabled={busy} onClick={() => void send({ type: 'rescue', trip: trip.id })}>
+                                                Подтвердить помощь и продолжить рейс
+                                            </Button>
+                                        </>
+                                    )}
+                                    <Button disabled={busy} onClick={() => void send({ type: 'failure', trip: trip.id })}>Сбой и возврат на базу</Button>
+                                </div>
+                            )}
+                        </Entry>
+                    );
+                }) : <p>Рейсов пока нет</p>}
             </Panel>
             <PilotComparison />
             <Panel title="Экономика WB"><Finances state={state} role="wb" /></Panel>

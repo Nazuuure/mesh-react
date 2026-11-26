@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import { pointName } from '../../functions/format';
+import { courierStatus } from '../../functions/logistics';
 import { cityRoutes } from '../../functions/map';
 import { useServerClock } from '../../hooks/useServerClock';
 import type { MeshState } from '../../types';
@@ -29,7 +30,7 @@ export function RouteMap({ state, office, offset }: { state: MeshState; office?:
                     <small>{routes.length ? 'Пунктир — маршрут, точка — расчётное положение ровера.' : 'Активных рейсов нет'}</small>
                     {routes.map(({ trip, paused, units }) => (
                         <Entry key={trip.id}>
-                            <strong>{trip.robot} · рейс №{trip.id}</strong> · {paused ? 'Застрял · курьер выслан' : trip.status}<br />
+                            <strong>{trip.robot} · рейс №{trip.id}</strong> · {paused ? (office ? 'Рейс приостановлен' : courierStatus(trip) === 'needed' ? 'Застрял · требуется помощь' : 'Застрял · курьер отправлен') : trip.status}<br />
                             {trip.route.map(id => pointName(state, id)).join(' → ')} · {units} уп.
                         </Entry>
                     ))}

@@ -1,7 +1,7 @@
 import { routePosition } from '../../../model.mjs';
 import type { MeshState, Place, Stop, Trip } from '../types';
 import { pickupPoints } from './format';
-import { activeTrips, visitsOffice } from './logistics';
+import { activeTrips } from './logistics';
 
 export const mapPoint = (place: Place): [number, number] => [60 + place.x * 89, 22 + place.y * 48];
 
@@ -17,7 +17,7 @@ function timedStops(state: MeshState, trip: Trip): Stop[] {
 export function cityRoutes(state: MeshState, office: string | undefined, now: number) {
     const points = pickupPoints(state);
     const cities = [...new Set(points.filter(point => !office || point.id === office).map(point => point.city))];
-    const trips = activeTrips(state).filter(trip => !office || visitsOffice(trip, office));
+    const trips = activeTrips(state).filter(trip => !office || trip.route.includes(office));
 
     return cities.map(city => {
         const local = points.filter(point => point.city === city);

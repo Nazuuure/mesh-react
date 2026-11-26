@@ -196,7 +196,7 @@ export function apply(s,a,now=Date.now()){
    else{for(const r of group){r.tried.push(r.target);r.target=null;r.status='Новая'}suggest(s,group)}
    break
  }
- case 'stuck':case 'rescue':{
+ case 'stuck':case 'dispatchCourier':case 'rescue':{
    const trip=s.trips.find(t=>t.id===Number(a.trip))
    check(trip?.status==='В пути','Выберите активный рейс')
    const shipments=s.requests.filter(r=>trip.ids.includes(r.id))
@@ -204,28 +204,28 @@ export function apply(s,a,now=Date.now()){
      check(!trip.incident,'Симуляция уже проведена для этого рейса')
      const moving=shipments.filter(r=>r.status==='В пути' && now<r.eta)
      check(moving.length,'Ровер уже прибыл')
-     const stops=trip.route.map((id,i)=>{
-       const point=place(s,id)
-       const time=i?shipments.find(r=>r.target===id).eta:shipments[0].sentAt
-       return [point.x,point.y,time]
-     })
-     const position=routePosition(stops,now)
-     const city=place(s,trip.route[0]).city
-     const nearest=s.places.filter(p=>p.city===city && p.id!=='hub')
-       .sort((a,b)=>distance(a,position)-distance(b,position))[0]
-     trip.incident={at:now,office:nearest.id}
+     trip.incident={at:now,dispatchedAt:null}
+     for(const shipment of moving)shipment.pausedAt=now
+     break
+   }
+
+   const incident=trip.incident
+   check(incident&&incident.resumedAt==null,'Нет активного инцидента')
+   const paused=shipments.filter(r=>r.pausedAt!=null)
+   if(a.type==='dispatchCourier'){
+     check(incident.dispatchedAt===null,'Курьер уже отправлен')
+     const units=paused.reduce((total,r)=>total+r.qty,0)
+     check(units>0,'В рейсе нет груза, ожидающего помощи')
+     incident.dispatchedAt=now
      trip.assistanceCost=rates.courier
-     const units=moving.reduce((total,r)=>total+r.qty,0)
-     for(const r of moving){
-       r.pausedAt=now
+     for(const r of paused){
        const order=s.orders.find(o=>o.id===r.order)
        if(order)order.assistanceCost=(order.assistanceCost??0)+rates.courier*r.qty/units
      }
    }else{
-     const incident=trip.incident
-     check(incident && incident.office===a.place && incident.resumedAt==null,'Помощь может подтвердить назначенный ПВЗ')
+     check(incident.dispatchedAt!==null,'Сначала отправьте курьера')
      const delay=Math.max(0,now-incident.at)
-     for(const r of shipments.filter(r=>r.pausedAt!=null)){
+     for(const r of paused){
        r.sentAt+=delay;r.eta+=delay;delete r.pausedAt
      }
      incident.resumedAt=now
@@ -271,7 +271,7 @@ export function apply(s,a,now=Date.now()){
      }
      if(t)t.status='В пути'
    }else{
-     check(r.pausedAt==null,'Ровер ожидает помощи курьера')
+     check(r.pausedAt==null,'Рейс приостановлен')
      check(r.target===a.place&&['В пути','Разгрузка'].includes(r.status)&&now>=(r.eta||0),'Приёмка доступна в пункте назначения после прибытия')
      arrive(s,r,now);r.receivedAt=now
      if(t&&items.every(i=>i.status==='Доставлено'))t.status='Завершён'

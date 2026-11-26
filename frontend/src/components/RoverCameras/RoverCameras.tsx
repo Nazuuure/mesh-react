@@ -1,11 +1,11 @@
-import { activeTrips, visitsOffice } from '../../functions/logistics';
+import { activeTrips } from '../../functions/logistics';
 import type { MeshState } from '../../types';
 import { Entry } from '../Entry/Entry';
 import { Panel } from '../Panel/Panel';
 import styles from './RoverCameras.module.css';
 
-export function RoverCameras({ state, office }: { state: MeshState; office: string }) {
-    const trips = activeTrips(state).filter(trip => visitsOffice(trip, office));
+export function RoverCameras({ state }: { state: MeshState }) {
+    const trips = activeTrips(state);
 
     return (
         <Panel title="Камера ровера">
@@ -18,7 +18,7 @@ export function RoverCameras({ state, office }: { state: MeshState; office: stri
                             : <p>Видеопоток не подключён</p>}
                     </Entry>
                 );
-            }) : <p>У выбранного ПВЗ сейчас нет активного рейса.</p>}
+            }) : <p>Сейчас нет активных рейсов.</p>}
         </Panel>
     );
 }
