@@ -1,5 +1,9 @@
 import type { MeshState, Place, Product, Shipment, Stop } from './frontend/src/types';
 
+export const roverRadiusKm: number;
+export function localKm(from:Place,to:Place):number;
+export function vanQuote(state:MeshState,rows:Shipment[]):{km:number;units:number;fare:number;minimum:number;saving:number};
+export function isVanPool(state:MeshState,row:Shipment):boolean;
 export const categories: string[];
 export function travelSeconds(roverStop?: number): number;
 

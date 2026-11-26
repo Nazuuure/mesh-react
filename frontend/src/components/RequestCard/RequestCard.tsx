@@ -18,7 +18,7 @@ export function RequestCard({ state, shipment, offset, children }: {
                 <strong>№{shipment.id} · {itemName(state, shipment.product)} × {shipment.qty}</strong>
                 <Tag>{shipment.status}</Tag>
             </div>
-            <p>{pointName(state, shipment.from)} → {pointName(state, shipment.to)}</p>
+            <p>{shipment.kind === 'Газель' && 'Газель · '}{pointName(state, shipment.from)} → {pointName(state, shipment.to)}</p>
             <small>
                 {shipment.purpose === 'pickup' ? 'На выдачу' : 'На хранение'}
                 {shipment.order ? ' · заказ №' + shipment.order : ''}

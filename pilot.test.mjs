@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compareRoutes, profitBoundary } from './economics.mjs';
-import { apply, product, scheduleRovers, seed, space } from './model.mjs';
+import { apply, localKm, product, scheduleRovers, seed, space, syncGeography } from './model.mjs';
 
 const scenario = {
     units: 8, unitLiters: 1, liters: 8, meshDays: 7, hubDays: 7,
@@ -235,4 +235,39 @@ test('Seller destination follows category demand, city, capacity, and excludes t
     apply(state, { type: 'transfer', product: item.id, place: 'p3', city: 'Йошкар-Ола', qty: 1 });
     assert.equal(state.requests.at(-1).to, 'p1');
     assert.throws(() => apply(state, { type: 'restock', product: item.id, city: 'Другой город', qty: 1 }), /Выберите город/);
+});
+
+test('Long city leg pools cargo for one profitable van and receives each shipment once', () => {
+    const s = seed();
+    const transfer = (product, qty) => apply(s, {type:'transfer', product, place:'p2', to:'p3', qty});
+    transfer(2, 12);
+    const first = s.requests.at(-1);
+    assert.equal(scheduleRovers(s, 10000), false);
+    assert.throws(() => apply(s,{type:'van',ids:[first.id]}), /Недостаточно упаковок/);
+    transfer(s.products.find(item=>item.name==='Мышь Pixel').id, 2);
+    const second = s.requests.at(-1);
+    apply(s,{type:'van',ids:[first.id, second.id]});
+    assert.equal(first.kind,'Газель');
+    const km=localKm(s.places.find(p=>p.id==='p2'),s.places.find(p=>p.id==='p3'));
+    assert.ok(Math.abs(first.cost+second.cost-Math.round((600+km*50)*100)/100)<1e-8);
+    apply(s,{type:'ship',request:first.id,place:'p2'},1000);
+    assert.equal(second.status,'В пути');
+    for(const r of [first,second]) apply(s,{type:'receive',request:r.id,place:'p3'},r.eta);
+    assert.equal(second.status,'Доставлено');
+    assert.throws(()=>apply(s,{type:'receive',request:first.id,place:'p3'},first.eta));
+});
+
+test('Legacy points acquire symmetric distances and retain supplied coordinates',()=>{
+    const s=seed();
+    for(const p of s.places){delete p.distancesKm;delete p.lat;delete p.lon}
+    assert.equal(syncGeography(s),true);
+    assert.equal(syncGeography(s),false);
+    for(const p of s.places)for(const q of s.places){
+        assert.equal(localKm(p,q),localKm(q,p));
+        assert.equal(localKm(p,q)===0,p.id===q.id);
+    }
+    const p=s.places[1], q=s.places[2];
+    p.lat=0;p.lon=0;q.lat=0;q.lon=1;
+    syncGeography(s);
+    assert.ok(Math.abs(localKm(p,q)-111.195)<0.001);
 });

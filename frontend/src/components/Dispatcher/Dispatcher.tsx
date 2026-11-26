@@ -1,4 +1,4 @@
-import { rover } from '../../../../model.mjs';
+import { isVanPool, vanQuote, rover } from '../../../../model.mjs';
 import { num, pointName, rub } from '../../functions/format';
 import { courierStatus } from '../../functions/logistics';
 import { useDispatcher } from '../../hooks/useDispatcher';
@@ -24,6 +24,7 @@ interface Props extends CabinetProps {
 export function Dispatcher({ state, send, busy, offset, notify }: Props) {
     const dispatcher = useDispatcher(state, send);
 
+    const pools=Map.groupBy(state.requests.filter(r=>isVanPool(state,r)),r=>r.from+"-"+r.to);
     return (
         <>
             <Hero title="Диспетчерская WB" description="Следите за автоматическими рейсами роверов, поставками с хаба и сбоями." />
@@ -44,6 +45,29 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                     ))}
                 </Panel>
             )}
+            <details className={shared.panel}>
+                <summary>Координаты и расстояния между точками</summary>
+                <p>Демонстрационные координаты. Расстояние по прямой, км.</p>
+                <div style={{overflowX:'auto'}}><table>
+                    <thead><tr><th>Точка</th><th>Широта, долгота</th>{state.places.map(p=><th key={p.id}>{p.name}</th>)}</tr></thead>
+                    <tbody>{state.places.map(p=><tr key={p.id}><th>{p.city} · {p.name}</th><td>{p.lat}, {p.lon}</td>
+                        {state.places.map(q=><td key={q.id}>{num(p.distancesKm[q.id])}</td>)}</tr>)}</tbody>
+                </table></div>
+            </details>
+            <Panel title="Пул Газели">
+                <p>Городские плечи свыше 8 км. Учебный тариф: 600 ₽ за подачу и 25 ₽/км с обратным пробегом.</p>
+                {pools.size===0 && <p>Дальних заявок пока нет.</p>}
+                {Array.from(pools,([key,rows])=>{
+                    const q=vanQuote(state,rows);
+                    const ids=rows.map(r=>r.id);
+                    return <Entry key={key}>
+                        <b>{pointName(state,rows[0].from)} → {pointName(state,rows[0].to)} · {num(q.km)} км</b>
+                        <p>{q.units} уп. · вызов от {q.minimum} уп. · рейс {rub(q.fare)} · эффект к хабу {rub(q.saving)}</p>
+                        <Button disabled={busy || q.saving<=0} onClick={()=>void send({type:'van',ids})}>Вызвать Газель</Button>
+                        <Button disabled={busy} onClick={()=>void send({type:'viaHub',ids,place:'',purpose:'auto'})}>Через хаб</Button>
+                    </Entry>
+                })}
+            </Panel>
             <Panel title="Очередь заявок" scroll>
                 {dispatcher.groups.length ? dispatcher.groups.map(group => (
                     <DispatchForm key={group.key} state={state} send={send} busy={busy} group={group} notify={notify} offset={offset} />

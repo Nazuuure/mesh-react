@@ -1,4 +1,4 @@
-import { freeStock, rover, source, travelSeconds } from '../../../model.mjs';
+import { localKm, roverRadiusKm, freeStock, rover, source, travelSeconds } from '../../../model.mjs';
 import type { MeshState, Order, Place } from '../types';
 import { pickupPoints, pointAddress } from './format';
 
@@ -24,10 +24,10 @@ export function getCatalog(state: MeshState, pickup: Place, category: string, qu
             const nearby = stock && stock.id !== 'hub' && stock.city === pickup.city;
             const here = stock?.id === pickup.id;
             const availability = here ? 0 : nearby ? 1 : stock ? 2 : 3;
-            const byRover = nearby && item.liters <= rover.liters && (item.weightKg ?? 1) <= rover.maxKg;
+            const byRover = nearby && localKm(stock,pickup)<=roverRadiusKm && item.liters <= rover.liters && (item.weightKg ?? 1) <= rover.maxKg;
             const seconds = here ? 0 : stock ? travelSeconds(byRover ? 1 : 0) : Infinity;
             const timing = here || !stock ? '' : (byRover ? 'Ровер от ' : 'Около ') + seconds + ' с после отправки';
-            const distance = nearby ? Math.hypot(stock.x - pickup.x, stock.y - pickup.y) : 0;
+            const distance = nearby ? localKm(stock,pickup) : 0;
             const hint = ['Готов к выдаче', 'Можно забрать в соседнем ПВЗ', 'Потребуется поставка', 'Нет в наличии'][availability];
 
             return {

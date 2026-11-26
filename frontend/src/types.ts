@@ -7,6 +7,9 @@ export interface Place {
     name: string;
     city: string;
     address?: string;
+    lat: number;
+    lon: number;
+    distancesKm: Record<string,number>;
     x: number;
     y: number;
     capacity: number;
@@ -43,7 +46,7 @@ export interface Shipment {
     from: string;
     to: string;
     order: number | null;
-    kind: 'Робот' | 'Магистраль';
+    kind: 'Робот' | 'Магистраль' | 'Газель';
     status: RequestStatus;
     target?: string | null;
     batch?: number;
@@ -102,6 +105,7 @@ export type Action =
     | { type: 'product'; name: string; category: string; price: string; dims: string[]; qty: string; city: string; weightKg: string }
     | { type: 'restock'; product: string; qty: string; city: string }
     | { type: 'transfer'; product: string; qty: string; place: string; city: string }
+    | { type: 'van'; ids: number[] }
     | { type: 'offer' | 'viaHub'; ids: number[]; purpose: string; place: string }
     | { type: 'reply'; batch: number; place: string; accept: boolean }
     | { type: 'ship' | 'receive'; request: number; place: string }

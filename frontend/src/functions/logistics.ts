@@ -1,5 +1,5 @@
 import { compareRoutes, rates } from '../../../economics.mjs';
-import { loadKg, rover, space } from '../../../model.mjs';
+import { isVanPool, loadKg, rover, space } from '../../../model.mjs';
 import type { MeshState, Shipment, Trip } from '../types';
 import { num, pointName, rub } from './format';
 import { pilotDefaults, routeLabels, roverLimit } from './pilot';
@@ -35,7 +35,7 @@ export function officeQueues(state: MeshState, office: string) {
 
 
 export function dispatchGroups(state: MeshState) {
-    const queue = state.requests.filter(request => ['Новая', 'Ожидает места'].includes(request.status));
+    const queue = state.requests.filter(request => ['Новая', 'Ожидает места'].includes(request.status) && !isVanPool(state,request));
     const groups = Object.groupBy(queue, request => request.kind === 'Робот'
         ? 'robot-' + request.from
         : 'hub-' + state.places.find(place => place.id === request.to)?.city);

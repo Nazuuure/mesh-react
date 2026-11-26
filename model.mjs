@@ -32,6 +32,39 @@ export function loadKg(s, rows) {
   return rows.reduce((sum, row) => sum + (product(s,row.product).weightKg ?? 1) * row.qty, 0)
 }
 
+// Illustrative locations for the pilot, not surveyed pickup point addresses.
+const demoCoordinates = {
+  hub:[55.760,49.090], p1:[56.630,47.890], p2:[56.657,47.988],
+  p3:[56.684,47.841], p4:[55.796,49.130], p5:[55.862,49.226]
+}
+
+function directKm(a,b){
+  const rad=Math.PI/180
+  const h=Math.sin((b.lat-a.lat)*rad/2)**2 +
+    Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin((b.lon-a.lon)*rad/2)**2
+  return Math.round(6371*2*Math.asin(Math.sqrt(Math.min(1,h)))*1000)/1000
+}
+
+export function syncGeography(state){
+  let changed=false
+  for(const p of state.places){
+    if(p.lat==null || p.lon==null){
+      const [lat,lon]=demoCoordinates[p.id]
+      p.lat??=lat
+      p.lon??=lon
+      changed=true
+    }
+  }
+  for(const p of state.places){
+    const distances=Object.fromEntries(state.places.map(q=>[q.id,directKm(p,q)]))
+    if(JSON.stringify(p.distancesKm)!==JSON.stringify(distances)){
+      p.distancesKm=distances
+      changed=true
+    }
+  }
+  return changed
+}
+
 export function seed(){
   const places = [
     ['hub','Распределительный хаб','Казань',0,0,100000],
@@ -50,6 +83,7 @@ export function seed(){
     ['Часы Motion','Аксессуары',1790,1,'p4','⌚']
   ].map(([name,category,price,liters,loc,icon],i)=>({id:i+1,name,category,price,liters,icon,dims:[10,10,liters*10],stock:{[loc]:12},day:0}))
   const state={places,products,orders:[],requests:[],trips:[],day:7,next:10,version:0,ledger:[],history:places.slice(1).flatMap((p,i)=>categories.map((category,j)=>({place:p.id,category,count:3+(i*7+j*11)%23})))}
+  syncGeography(state)
   expandCatalog(state)
   return state
 }
@@ -83,7 +117,7 @@ export function space(s,id){
   const held=s.requests.filter(r=>active(r)&&r.purpose!=='pickup'&&r.target===id&&['Согласование','Погрузка','В пути','Разгрузка'].includes(r.status)).reduce((n,r)=>n+product(s,r.product).liters*r.qty,0)
   return {used,held,pickup,free:place(s,id).capacity-used-held}
 }
-const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y)
+const distance=(a,b)=>a.distancesKm[b.id]
 export function source(s,p,target){
   const dest=place(s,target)
   return s.places.filter(q=>freeStock(s,p,q.id)>0).sort((a,b)=>rank(a)-rank(b))[0]
@@ -204,6 +238,14 @@ export function apply(s,a,now=Date.now()){
    }
    break
  }
+ case 'van':{
+   check(rows.length && rows.every(r=>isVanPool(s,r) && r.from===rows[0].from && r.to===rows[0].to),'Выберите дальние заявки одного направления')
+   const quote=vanQuote(s,rows)
+   check(quote.saving>0,'Недостаточно упаковок для выгодного рейса')
+   check(space(s,rows[0].to).free>=volume(s,rows.filter(r=>r.purpose!=='pickup')),'Недостаточно места в принимающем ПВЗ')
+   for(const r of rows)Object.assign(r,{kind:'Газель',batch:rows[0].id,target:r.to,status:'Погрузка',cost:quote.fare*r.qty/quote.units})
+   break
+ }
  case 'viaHub':check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'),'Выберите новые городские заявки');for(const r of rows)r.kind='Магистраль';break
  case 'offer':case 'trip':{
    check(rows.length,'Выберите заявки')
@@ -261,7 +303,8 @@ export function apply(s,a,now=Date.now()){
  case 'ship':case 'receive':case 'failure':{
    const r=s.requests.find(r=>r.id===Number(a.request))
    const t=a.type==='failure'?s.trips.find(t=>t.id===Number(a.trip)):s.trips.find(t=>t.ids.includes(r?.id)&&!['Сбой','Завершён'].includes(t.status))
-   const items=t?s.requests.filter(r=>t.ids.includes(r.id)):[r]
+   const items=t?s.requests.filter(r=>t.ids.includes(r.id)):
+     a.type==='ship' && r?.kind==='Газель'?s.requests.filter(i=>i.kind==='Газель' && i.batch===r.batch):[r]
    if(a.type==='failure'){
      check(t&&['Погрузка','В пути','Разгрузка'].includes(t.status),'Рейс уже закрыт')
      const moving=items.filter(i=>i.departed&&i.status!=='Доставлено')
@@ -368,11 +411,26 @@ function compatibleLoad(s, requests) {
   return {rows,units}
 }
 
+// Pilot assumptions: schematic coordinates, round trip, no paid waiting.
+export const localKm = (from,to) => distance(from,to)
+export const roverRadiusKm = 8
+export function vanQuote(s, rows) {
+  const first=rows[0]
+  const km=localKm(place(s,first.from),place(s,first.to))
+  const units=rows.reduce((sum,r)=>sum+r.qty,0)
+  const fare=Math.round((600+25*2*km)*100)/100
+  return {km,units,fare,minimum:Math.floor(fare/rates.hubTransport)+1,saving:units*rates.hubTransport-fare}
+}
+export function isVanPool(s,r) {
+  return r.kind==='Робот' && r.status==='Новая' &&
+    place(s,r.from).city===place(s,r.to).city && localKm(place(s,r.from),place(s,r.to))>roverRadiusKm
+}
+
 export function scheduleRovers(s,now) {
   const previous=s.dispatchWindows??{}
   const windows={}
   let assigned=false
-  const waiting=s.requests.filter(r=>r.kind==='Робот'&&r.status==='Новая').sort((a,b)=>a.id-b.id)
+  const waiting=s.requests.filter(r=>r.kind==='Робот'&&r.status==='Новая'&&!isVanPool(s,r)).sort((a,b)=>a.id-b.id)
   const groups=Map.groupBy(waiting,r=>r.from)
   const robots=['R-01','R-02'].filter(robot=>!s.trips.some(t=>t.robot===robot&&!['Сбой','Завершён'].includes(t.status)))
   const origins=[...groups.keys()].sort((a,b)=>(previous[a]?.since??now)-(previous[b]?.since??now))
@@ -398,6 +456,7 @@ export function scheduleRovers(s,now) {
 function prepareTrip(s,a,rows){
    check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'&&r.from===rows[0].from),'Выберите новые заявки из одного ПВЗ')
    const qty=rows.reduce((n,r)=>n+r.qty,0)
+   check(!rows.some(r=>isVanPool(s,r)),'Плечо превышает дальность ровера')
    check(qty >= rover.minUnits, 'Для рейса нужно не менее '+rover.minUnits+' упаковок')
    check(volume(s,rows) <= rover.liters + 1e-8, 'Общий объём груза превышает '+rover.liters+' л')
    check(loadKg(s,rows) <= rover.maxKg + 1e-8, 'Масса груза превышает '+rover.maxKg+' кг')
