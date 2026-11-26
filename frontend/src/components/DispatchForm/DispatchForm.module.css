@@ -1,0 +1,13 @@
+.checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.checkbox input {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    accent-color: var(--purple);
+}

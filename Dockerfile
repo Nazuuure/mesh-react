@@ -1,8 +1,17 @@
+FROM node:24-alpine AS frontend
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY frontend ./frontend
+COPY model.mjs model.d.mts ./
+RUN npm run build
+
 FROM node:24-alpine
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev
-COPY --chown=node:node . .
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --chown=node:node server.mjs model.mjs ./
+COPY --from=frontend --chown=node:node /app/dist ./dist
 USER node
 ENV HOST=0.0.0.0
 EXPOSE 8000

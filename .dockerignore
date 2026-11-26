@@ -1,3 +1,4 @@
 .git
-*.sqlite
+*.sqlite*
 node_modules
+dist

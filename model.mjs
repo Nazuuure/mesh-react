@@ -19,6 +19,8 @@ export const rover = {
   idealMin: 8,
   idealMax: 14
 }
+export const travelSeconds = (roverStop = 0) => roverStop ? 10 * roverStop : 25
+
 // Legacy and demo cards use a nominal one-kilogram package.
 export function loadKg(s, rows) {
   return rows.reduce((sum, row) => sum + (product(s,row.product).weightKg ?? 1) * row.qty, 0)
@@ -221,7 +223,7 @@ export function apply(s,a,now=Date.now()){
      for(const i of items){
        product(s,i.product).stock[i.from]-=i.qty
        const ord=s.orders.find(o=>o.id===i.order);if(ord)ord.status='В пути'
-       const seconds=t?10*Math.max(1,t.route.indexOf(i.target)):25
+       const seconds=travelSeconds(t?Math.max(1,t.route.indexOf(i.target)):0)
        Object.assign(i,{departed:true,status:'В пути',sentAt:now,eta:now+seconds*1000})
      }
      if(t)t.status='В пути'

@@ -1,0 +1,7 @@
+.camera {
+    display: block;
+    width: min(100%, 640px);
+    margin-top: 10px;
+    border-radius: 12px;
+    background: #161219;
+}

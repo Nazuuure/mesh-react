@@ -1,6 +1,5 @@
 import http from 'node:http'
 import {readFile} from 'node:fs/promises'
-import {fileURLToPath} from 'node:url'
 import {apply,expandCatalog,seed} from './model.mjs'
 let load,save,close
 if(process.env.DATABASE_URL){
@@ -35,8 +34,8 @@ function tick(s){
 const cameraUrls = {'R-01':process.env.ROVER_R01_CAMERA_URL, 'R-02':process.env.ROVER_R02_CAMERA_URL}
 const respond=s=>({...s,cameraUrls,serverNow:Date.now()})
 let queue=Promise.resolve()
-const files={'/route-map.js':['route-map.js','application/javascript'],'/catalog.jpg':['catalog.jpg','image/jpeg'],'/app.js':['app.js','application/javascript'],'/style.css':['style.css','text/css'],'/model.mjs':['../model.mjs','application/javascript']}
-for (const role of Object.keys(roles)) files['/'+role+'/app.js']=[role+'/app.js','application/javascript']
+const site = new URL('./dist/', import.meta.url)
+const assetTypes = {'.js':'application/javascript','.css':'text/css','.jpg':'image/jpeg'}
 const server=http.createServer(async(req,res)=>{
  const send=(status,value,type='application/json')=>{res.writeHead(status,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store'});res.end(type==='application/json'?JSON.stringify(value):value)}
  try{
@@ -57,9 +56,21 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.method==='GET'&&req.url==='/'){res.writeHead(302,{Location:'/buyer/'});return res.end()}
   if(req.method==='GET'&&knownRole&&(route===''||route==='index.html')){
-    return send(200,await readFile(new URL('./public/'+role+'/index.html',import.meta.url)),'text/html')
+    try {
+      return send(200,await readFile(new URL('index.html',site)),'text/html')
+    } catch(error){
+      if(error.code!=='ENOENT')throw error
+      return send(503,{error:'Соберите интерфейс командой npm run build или откройте npm run dev'})
+    }
   }
-  if(req.method==='GET'&&Object.hasOwn(files,req.url)){const [name,type]=files[req.url];return send(200,await readFile(fileURLToPath(new URL('./public/'+name,import.meta.url))),type)}
+  const asset = req.url.match(/^\/assets\/([a-zA-Z0-9_-]+(\.[a-z]+))$/)
+  if(req.method==='GET'&&asset&&Object.hasOwn(assetTypes,asset[2])){
+    try {
+      return send(200,await readFile(new URL('assets/'+asset[1],site)),assetTypes[asset[2]])
+    } catch(error){
+      if(error.code!=='ENOENT')throw error
+    }
+  }
   send(404,{error:'Адрес не найден'})
  }catch(e){send(400,{error:e.message})}
 })

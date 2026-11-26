@@ -1,0 +1,77 @@
+.orders {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+}
+
+.orders summary {
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.orderStrip {
+    display: grid;
+    height: 16rem;
+    grid-auto-flow: column;
+    grid-auto-columns: min(18rem, 95%);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+    padding-bottom: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.orderStrip > div {
+    padding: 10px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.catalogHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 10px 24px;
+}
+
+.catalogHead h2 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.catalogHead label {
+    max-width: 370px;
+}
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.recommendations {
+    margin: 0 0 10px;
+    font-size: 17px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 1120px) {
+    .grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 620px) {
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

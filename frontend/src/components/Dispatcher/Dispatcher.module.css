@@ -1,0 +1,15 @@
+.ship {
+    margin-top: 8px;
+}
+
+.demo {
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+}
+
+.demo summary {
+    font-weight: 700;
+    cursor: pointer;
+}
