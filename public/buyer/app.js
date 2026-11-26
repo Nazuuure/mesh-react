@@ -65,7 +65,7 @@ function buyer(){
  const orderButton=src?button('Заказать','order',{product:p.id,to:destination},true):'<button type="button" class="primary" disabled>Заказать</button>'
  const availableOffices=offices().filter(point=>freeStock(state,p,point.id)>0)
  const locations=availableOffices.length>1?`<small>В наличии в ПВЗ · ${availableOffices.map(point=>esc(`${point.city}, ${point.name}`)).join(' / ')}</small>`:''
- return `<article class="card"><div class="art tile-${p.id>=1&&p.id<=6?p.id:'new'}"><span aria-hidden="true">${p.id>6?esc(p.icon || '📦'):''}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div>${orderButton}<small>${hint}</small>${locations}</article>`}).join('')+(matches.length?'':none('Товары не найдены. Измените запрос или категорию.'))+'</div>'
+ return `<article class="card"><div class="art tile-${p.id>=1&&p.id<=6?p.id:'new'}"><span aria-hidden="true">${p.id>6?esc(p.icon || '📦'):''}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div><small>${hint}</small>${locations}${orderButton}</article>`}).join('')+(matches.length?'':none('Товары не найдены. Измените запрос или категорию.'))+'</div>'
 }
 
 
