@@ -14,13 +14,13 @@ const purposes: Option[] = [
     ['pickup', 'На выдачу по заказу'],
 ];
 
-interface Props extends Pick<CabinetProps, 'state' | 'send' | 'busy'> {
+interface Props extends Pick<CabinetProps, 'state' | 'send' | 'busy' | 'offset'> {
     group: DispatchGroup;
     notify: (message: string) => void;
 }
 
-export function DispatchForm({ state, send, busy, group, notify }: Props) {
-    const form = useDispatchForm(state, group, send, notify);
+export function DispatchForm({ state, send, busy, group, notify, offset }: Props) {
+    const form = useDispatchForm(state, group, send, notify, offset);
     return (
         <Entry>
             <form onSubmit={form.submit}>

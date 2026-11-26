@@ -4,8 +4,10 @@ import { formValue } from '../functions/format';
 import { loadSummary } from '../functions/logistics';
 import type { DispatchGroup } from '../functions/logistics';
 import type { MeshState, SendAction } from '../types';
+import { useServerClock } from './useServerClock';
 
-export function useDispatchForm(state: MeshState, group: DispatchGroup, send: SendAction, notify: (message: string) => void) {
+export function useDispatchForm(state: MeshState, group: DispatchGroup, send: SendAction, notify: (message: string) => void, offset: number) {
+    const now = useServerClock(offset);
     const [selected, setSelected] = useState<number[]>([]);
     const requests = group.requests.filter(request => selected.includes(request.id));
 
@@ -34,5 +36,5 @@ export function useDispatchForm(state: MeshState, group: DispatchGroup, send: Se
         if (complete) setSelected([]);
     }
 
-    return { selected, select, submit, summary: loadSummary(state, requests, group.isHub) };
+    return { selected, select, submit, summary: loadSummary(state, requests, group.isHub, now) };
 }

@@ -1,6 +1,8 @@
+import { compareRoutes, rates } from '../../../economics.mjs';
 import { loadKg, rover, space } from '../../../model.mjs';
 import type { MeshState, Shipment, Trip } from '../types';
 import { num, pointName, rub } from './format';
+import { pilotDefaults, routeLabels, roverLimit } from './pilot';
 
 export const activeTrips = (state: MeshState) => state.trips.filter(trip =>
     ['Погрузка', 'В пути', 'Разгрузка'].includes(trip.status));
@@ -59,7 +61,7 @@ export function dispatchGroups(state: MeshState) {
 
 export type DispatchGroup = ReturnType<typeof dispatchGroups>[number];
 
-export function loadSummary(state: MeshState, requests: Shipment[], isHub: boolean) {
+export function loadSummary(state: MeshState, requests: Shipment[], isHub: boolean, now: number) {
     const units = requests.reduce((total, request) => total + request.qty, 0);
     if (!units) return '';
     const base = 'Выбрано ' + units + ' шт. · ' + num(cargoLiters(state, requests)) + ' л';
@@ -67,6 +69,20 @@ export function loadSummary(state: MeshState, requests: Shipment[], isHub: boole
     const range = units < rover.minUnits ? 'недостаточно упаковок'
         : units < rover.idealMin ? 'ниже рекомендуемой загрузки'
         : units > rover.idealMax ? 'выше рекомендуемой загрузки' : 'рекомендуемая загрузка';
-    return base + ' из ' + num(rover.liters) + ' л · ' + num(loadKg(state, requests)) + ' из ' +
-        rover.maxKg + ' кг · ' + range + ' · рейс ' + rub(360 / units) + '/шт. · хаб 80 ₽/шт.';
+    const liters = cargoLiters(state, requests);
+    const kilograms = loadKg(state, requests);
+    const wait = Math.floor(Math.max(0, ...requests.map(request => (now - (request.queuedAt ?? now)) / 1000)));
+    const comparison = compareRoutes({
+        ...pilotDefaults, units, liters, meshDays: 0, hubDays: 0,
+        stops: new Set(requests.map(request => request.to)).size,
+        meshWait: wait, hubWait: wait + rates.hubWaitSeconds,
+    });
+    const limit = roverLimit(units, liters, kilograms);
+    const recommendation = limit
+        ? (comparison.hubSeconds <= pilotDefaults.deadline ? 'hub' : 'neither')
+        : comparison.recommendation;
+    const advice = routeLabels[recommendation] + (limit ? ' · ' + limit : '');
+    return base + ' из ' + num(rover.liters) + ' л · ' + num(kilograms) + ' из ' +
+        rover.maxKg + ' кг · ' + range + ' · ' + advice + ' · рейс ' + rub(rates.roverTrip / units) +
+        '/шт. · хаб ' + rub(rates.hubTransport) + '/шт. · ожидание уже ' + num(wait) + ' с.';
 }

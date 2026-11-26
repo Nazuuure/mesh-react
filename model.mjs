@@ -1,3 +1,8 @@
+import { addStock, shippedCargo, takeStock } from './inventory.mjs'
+import { ledgerComparison, rates, travelSeconds } from './economics.mjs'
+
+export { travelSeconds }
+
 export const categories = ['Электроника','Дом','Аксессуары']
 export const stages = ['Погрузка','В пути','Разгрузка','Завершён']
 const catalogAdditions = [
@@ -19,7 +24,6 @@ export const rover = {
   idealMin: 8,
   idealMax: 14
 }
-export const travelSeconds = (roverStop = 0) => roverStop ? 10 * roverStop : 25
 
 // Legacy and demo cards use a nominal one-kilogram package.
 export function loadKg(s, rows) {
@@ -83,9 +87,9 @@ export function source(s,p,target){
   return s.places.filter(q=>freeStock(s,p,q.id)>0).sort((a,b)=>rank(a)-rank(b))[0]
   function rank(q){return q.id===target?0:q.id==='hub'?100:q.city===dest.city?1+distance(q,dest):200+distance(q,dest)}
 }
-function request(s,p,qty,from,to,order=null){
+function request(s,p,qty,from,to,order,now){
   const trunk=from==='hub'||place(s,from).city!==place(s,to).city
-  const r={id:s.next++,product:p.id,qty,from,to,order,purpose:order?'pickup':'storage',created:s.day,status:'Новая',kind:trunk?'Магистраль':'Робот',target:null,tried:[],departed:false}
+  const r={id:s.next++,product:p.id,qty,from,to,order,purpose:order?'pickup':'storage',created:s.day,queuedAt:now,status:'Новая',kind:trunk?'Магистраль':'Робот',target:null,tried:[],departed:false}
   s.requests.push(r);return r
 }
 function volume(s,rows){return rows.reduce((a,r)=>a+product(s,r.product).liters*r.qty,0)}
@@ -96,14 +100,22 @@ function suggest(s,rows,id){
   if(id)check(fits(dest),'У пункта недостаточно места, другой город или он уже отклонил партию')
   for(const r of rows){r.target=dest?.id||null;r.status=dest?'Согласование':'Ожидает места';r.batch=rows[0].id}
 }
-function arrive(s,r){
-  const p=product(s,r.product)
-  if(!r.departed)p.stock[r.from]-=r.qty
-  p.stock[r.target]=(p.stock[r.target]||0)+r.qty
+function arrive(s,r,now){
+  const item=product(s,r.product)
+  const order=s.orders.find(o=>o.id===r.order)
+  const cargo=r.departed?shippedCargo(item,r):takeStock(item,r.from,r.qty,s.day,r.order)
+  addStock(item,r.target,cargo,s.day,r.order,r.purpose==='pickup')
+  delete r.cargo
   r.status='Доставлено'
-  const o=s.orders.find(o=>o.id===r.order)
-  if(o){o.pickup=r.purpose==='pickup';o.loc=r.target;o.status=o.loc===o.to?'Готов к выдаче':'Предложение';o.cost+=(r.cost||0)}
-  else if(r.target!==r.to)request(s,p,r.qty,r.target,r.to)
+  if(order){
+    order.pickup=r.purpose==='pickup'
+    order.loc=r.target
+    order.status=order.loc===order.to?'Готов к выдаче':'Предложение'
+    order.cost+=(r.cost||0)
+    if(order.status==='Готов к выдаче')order.readyAt=now
+  }else if(r.target!==r.to){
+    request(s,item,r.qty,r.target,r.to,null,now)
+  }
 }
 export function packingLiters(dims){
  check(Array.isArray(dims)&&dims.length===3,'Введите три размера упаковки')
@@ -138,24 +150,34 @@ export function apply(s,a,now=Date.now()){
    check(p&&q,'Выберите товар и точку размещения')
    const qty=number(a.qty,1,10000,true)
    check(space(s,q.id).free+1e-8>=p.liters*qty,'Недостаточно места')
-   p.stock[q.id]=(p.stock[q.id]||0)+qty
+   addStock(p,q.id,[{quantity:qty,storedDays:0}],s.day)
    break
  }
  case 'capacity':check(q&&q.id!=='hub','Выберите ПВЗ');{const v=number(a.value,0,1e6);check(v>=q.capacity-space(s,q.id).free,'Объём занят товаром или обещан входящей партии');q.capacity=v}break
  case 'transfer':{
    check(q&&to&&to.id!=='hub'&&p&&q.id!==to.id,'Проверьте пункты отправки и назначения')
    const qty=number(a.qty,1,10000,true);check(freeStock(s,p,q.id)>=qty,'Недостаточно свободного товара')
-   request(s,p,qty,q.id,to.id);break
+   request(s,p,qty,q.id,to.id,null,now);break
  }
  case 'order':{
    check(p&&to&&to.id!=='hub','Выберите товар и пункт выдачи');const src=source(s,p,to.id);check(src,'Товар закончился')
-   const order={id:s.next++,product:p.id,loc:src.id,to:to.id,status:'Предложение',cost:0,created:s.day}
+   const order={id:s.next++,product:p.id,loc:src.id,to:to.id,status:'Предложение',cost:0,created:s.day,createdAt:now}
    s.orders.push(order)
-   if(src.id===to.id)order.status='Готов к выдаче'
-   else if(src.id==='hub'||src.city!==to.city){order.status='Доставка';request(s,p,1,src.id,to.id,order.id)}
+   if(src.id===to.id){order.status='Готов к выдаче';order.readyAt=now}
+   else if(src.id==='hub'||src.city!==to.city){order.status='Доставка';request(s,p,1,src.id,to.id,order.id,now)}
    break
  }
- case 'choice':check(o?.status==='Предложение','Предложение уже обработано');if(a.accept===true)o.status='Готов к выдаче';else{o.status='Доставка';request(s,product(s,o.product),1,o.loc,o.to,o.id)}break
+ case 'choice':{
+   check(o?.status==='Предложение','Предложение уже обработано')
+   if(a.accept===true){
+     o.status='Готов к выдаче'
+     o.readyAt=now
+   }else{
+     o.status='Доставка'
+     request(s,product(s,o.product),1,o.loc,o.to,o.id,now)
+   }
+   break
+ }
  case 'viaHub':check(rows.length&&rows.every(r=>r.kind==='Робот'&&r.status==='Новая'),'Выберите новые городские заявки');for(const r of rows)r.kind='Магистраль';break
  case 'offer':case 'trip':{
    check(rows.length,'Выберите заявки')
@@ -170,7 +192,7 @@ export function apply(s,a,now=Date.now()){
  case 'reply':{
    const group=s.requests.filter(r=>r.batch===Number(a.batch)&&r.status==='Согласование'&&r.target===a.place)
    check(group.length,'Заявка уже обработана')
-   if(a.accept===true){for(const r of group){r.cost=80*r.qty;r.status='Погрузка'}}
+   if(a.accept===true){for(const r of group){r.cost=rates.hubTransport*r.qty;r.status='Погрузка'}}
    else{for(const r of group){r.tried.push(r.target);r.target=null;r.status='Новая'}suggest(s,group)}
    break
  }
@@ -180,6 +202,8 @@ export function apply(s,a,now=Date.now()){
    const shipments=s.requests.filter(r=>trip.ids.includes(r.id))
    if(a.type==='stuck'){
      check(!trip.incident,'Симуляция уже проведена для этого рейса')
+     const moving=shipments.filter(r=>r.status==='В пути' && now<r.eta)
+     check(moving.length,'Ровер уже прибыл')
      const stops=trip.route.map((id,i)=>{
        const point=place(s,id)
        const time=i?shipments.find(r=>r.target===id).eta:shipments[0].sentAt
@@ -190,12 +214,20 @@ export function apply(s,a,now=Date.now()){
      const nearest=s.places.filter(p=>p.city===city && p.id!=='hub')
        .sort((a,b)=>distance(a,position)-distance(b,position))[0]
      trip.incident={at:now,office:nearest.id}
-     for(const r of shipments) if(r.status==='В пути')r.pausedAt=now
+     trip.assistanceCost=rates.courier
+     const units=moving.reduce((total,r)=>total+r.qty,0)
+     for(const r of moving){
+       r.pausedAt=now
+       const order=s.orders.find(o=>o.id===r.order)
+       if(order)order.assistanceCost=(order.assistanceCost??0)+rates.courier*r.qty/units
+     }
    }else{
      const incident=trip.incident
      check(incident && incident.office===a.place && incident.resumedAt==null,'Помощь может подтвердить назначенный ПВЗ')
      const delay=Math.max(0,now-incident.at)
-     for(const r of shipments){r.sentAt+=delay;r.eta+=delay;delete r.pausedAt}
+     for(const r of shipments.filter(r=>r.pausedAt!=null)){
+       r.sentAt+=delay;r.eta+=delay;delete r.pausedAt
+     }
      incident.resumedAt=now
    }
    break
@@ -209,9 +241,16 @@ export function apply(s,a,now=Date.now()){
      const moving=items.filter(i=>i.departed&&i.status!=='Доставлено')
      const held=moving.filter(i=>!s.orders.find(o=>o.id===i.order)?.pickup)
      check(space(s,t.route[0]).free>=volume(s,held),'Освободите место для возврата')
+     t.failedTransport=moving.reduce((total,i)=>total+(i.cost??0),0)
      for(const i of items.filter(i=>i.status!=='Доставлено')){
-       if(i.departed)product(s,i.product).stock[i.from]+=i.qty
-       const ord=s.orders.find(o=>o.id===i.order);if(ord)ord.status='Доставка'
+       const order=s.orders.find(o=>o.id===i.order)
+       if(i.departed){
+         const item=product(s,i.product)
+         addStock(item,i.from,shippedCargo(item,i),s.day,i.order,order?.pickup)
+         if(order)order.failedTransport=(order.failedTransport??0)+(i.cost??0)
+       }
+       if(order)order.status='Доставка'
+       delete i.cargo
        delete i.pausedAt
        Object.assign(i,{departed:false,status:'Новая',target:null,sentAt:null,eta:null})
      }
@@ -221,8 +260,12 @@ export function apply(s,a,now=Date.now()){
    if(a.type==='ship'){
      check(r.from===a.place&&items.every(i=>i.status==='Погрузка'),'Отправку подтверждает пункт отправления после согласования')
      for(const i of items){
-       product(s,i.product).stock[i.from]-=i.qty
-       const ord=s.orders.find(o=>o.id===i.order);if(ord)ord.status='В пути'
+       i.cargo=takeStock(product(s,i.product),i.from,i.qty,s.day,i.order)
+       const order=s.orders.find(o=>o.id===i.order)
+       if(order){
+         order.status='В пути'
+         order.firstSentAt??=now
+       }
        const seconds=travelSeconds(t?Math.max(1,t.route.indexOf(i.target)):0)
        Object.assign(i,{departed:true,status:'В пути',sentAt:now,eta:now+seconds*1000})
      }
@@ -230,18 +273,46 @@ export function apply(s,a,now=Date.now()){
    }else{
      check(r.pausedAt==null,'Ровер ожидает помощи курьера')
      check(r.target===a.place&&['В пути','Разгрузка'].includes(r.status)&&now>=(r.eta||0),'Приёмка доступна в пункте назначения после прибытия')
-     arrive(s,r);r.receivedAt=now
+     arrive(s,r,now);r.receivedAt=now
      if(t&&items.every(i=>i.status==='Доставлено'))t.status='Завершён'
    }
    break
  }
  case 'issue':{
-   check(o?.status==='Готов к выдаче'&&o.loc===a.place,'Заказ не готов в этом ПВЗ');const item=product(s,o.product)
-   item.stock[o.loc]--;o.status='Выдан'
-   const storage=(s.day-item.day)*item.liters*.5,payout=22+storage
-   s.ledger.push({order:o.id,loc:o.loc,price:item.price,storage,payout,transport:o.cost,pvz:payout-12,seller:item.price*.3-payout-o.cost,saving:80-payout-o.cost});break
+   check(o?.status==='Готов к выдаче'&&o.loc===a.place,'Заказ не готов в этом ПВЗ')
+   const item=product(s,o.product)
+   const [unit]=takeStock(item,o.loc,1,s.day,o.id)
+   o.status='Выдан'
+   const storage=unit.storedDays*item.liters*rates.storagePerLiterDay
+   const payout=rates.handling+rates.pickup+storage
+   const comparison=ledgerComparison({storage,transport:o.cost,failed:o.failedTransport,assistance:o.assistanceCost})
+   const elapsed=o.createdAt!=null&&o.readyAt!=null?Math.max(0,o.readyAt-o.createdAt)/1000:null
+   const waiting=o.createdAt!=null&&o.firstSentAt!=null?Math.max(0,o.firstSentAt-o.createdAt)/1000:null
+   s.ledger.push({
+     order:o.id,loc:o.loc,price:item.price,storage,payout,transport:o.cost,pvz:payout-rates.pickup,
+     seller:item.price*.3-payout-o.cost,saving:comparison.saving,comparison,elapsed,waiting,
+   })
+   break
  }
- case 'return':check(o?.status==='Выдан'&&o.loc===a.place,'Возврат уже учтён или выбран другой ПВЗ');check(space(s,o.loc).free>=product(s,o.product).liters,'Нет места для возврата');product(s,o.product).stock[o.loc]++;o.status='Возвращён';{const l=s.ledger.find(l=>l.order===o.id);l.seller-=l.price*.3+15;l.saving-=15}break
+ case 'return':{
+   check(o?.status==='Выдан'&&o.loc===a.place,'Возврат уже учтён или выбран другой ПВЗ')
+   const item=product(s,o.product)
+   check(space(s,o.loc).free>=item.liters,'Нет места для возврата')
+   addStock(item,o.loc,[{quantity:1,storedDays:0}],s.day)
+   o.status='Возвращён'
+   const entry=s.ledger.find(l=>l.order===o.id)
+   entry.seller-=entry.price*.3+rates.returnHandling
+   if(entry.comparison){
+     entry.comparison=ledgerComparison({
+       storage:entry.storage,transport:entry.transport,returned:true,
+       failed:entry.comparison.mesh.failed,assistance:entry.comparison.mesh.assistance,
+     })
+     entry.saving=entry.comparison.saving
+   }else{
+     entry.saving-=rates.returnHandling
+   }
+   break
+ }
  case 'day':s.day++;break
  default:throw Error('Неизвестная операция')
  }
@@ -258,5 +329,5 @@ function prepareTrip(s,a,rows){
    for(const id of stops)check(space(s,id).free>=volume(s,rows.filter(r=>r.to===id&&r.purpose!=='pickup')),'Нет места в пункте назначения')
    while(stops.length){const here=place(s,route.at(-1));stops.sort((a,b)=>distance(here,place(s,a))-distance(here,place(s,b)));route.push(stops.shift())}
    const trip={id:s.next++,robot:a.robot,status:stages[0],route,ids:rows.map(r=>r.id)};s.trips.push(trip)
-   for(const r of rows){r.status=trip.status;r.target=r.to;r.cost=360*r.qty/qty}
+   for(const r of rows){r.status=trip.status;r.target=r.to;r.cost=rates.roverTrip*r.qty/qty}
 }

@@ -1,5 +1,5 @@
 import { rover } from '../../../../model.mjs';
-import { num, pointName } from '../../functions/format';
+import { num, pointName, rub } from '../../functions/format';
 import { useDispatcher } from '../../hooks/useDispatcher';
 import shared from '../../styles/Shared.module.css';
 import type { CabinetProps } from '../../types';
@@ -9,6 +9,7 @@ import { Entry } from '../Entry/Entry';
 import { Finances } from '../Finances/Finances';
 import { Hero } from '../Hero/Hero';
 import { Panel } from '../Panel/Panel';
+import { PilotComparison } from '../PilotComparison/PilotComparison';
 import { RequestCard } from '../RequestCard/RequestCard';
 import { RouteMap } from '../RouteMap/RouteMap';
 import { Tag } from '../Tag/Tag';
@@ -40,7 +41,7 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
             )}
             <Panel title="Очередь заявок">
                 {dispatcher.groups.length ? dispatcher.groups.map(group => (
-                    <DispatchForm key={group.key} state={state} send={send} busy={busy} group={group} notify={notify} />
+                    <DispatchForm key={group.key} state={state} send={send} busy={busy} group={group} notify={notify} offset={offset} />
                 )) : <p>Новых заявок нет. Создайте перемещение у продавца или оформите заказ.</p>}
             </Panel>
             <Panel title="Рейсы роботов">
@@ -52,6 +53,8 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                     <Entry key={trip.id}>
                         <div className={shared.row}><strong>{trip.robot} · рейс №{trip.id}</strong><Tag>{trip.status}</Tag></div>
                         <p>{trip.route.map(id => pointName(state, id)).join(' → ')}</p>
+                        {trip.assistanceCost !== undefined && <p>Помощь курьера · {rub(trip.assistanceCost)}</p>}
+                        {!!trip.failedTransport && <p>Затраты на прерванную перевозку · {rub(trip.failedTransport)}</p>}
                         {dispatcher.active.has(trip.id) && (
                             <div className={shared.actions}>
                                 <small>Отправку подтверждает исходный пункт, получение — принимающий.</small>
@@ -67,6 +70,7 @@ export function Dispatcher({ state, send, busy, offset, notify }: Props) {
                     </Entry>
                 )) : <p>Рейсов пока нет</p>}
             </Panel>
+            <PilotComparison />
             <Panel title="Экономика WB"><Finances state={state} role="wb" /></Panel>
             <Panel title="Все заявки">
                 {dispatcher.history.length ? dispatcher.history.map(shipment => (

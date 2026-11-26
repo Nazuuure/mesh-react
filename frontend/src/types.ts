@@ -1,3 +1,5 @@
+import type { CostComparison } from '../../economics.mjs';
+
 export type Role = 'buyer' | 'seller' | 'pvz' | 'wb';
 
 export interface Place {
@@ -49,6 +51,7 @@ export interface Shipment {
     sentAt?: number;
     eta?: number;
     pausedAt?: number;
+    queuedAt?: number;
 }
 
 export interface Trip {
@@ -58,6 +61,8 @@ export interface Trip {
     ids: number[];
     status: 'Погрузка' | 'В пути' | 'Разгрузка' | 'Завершён' | 'Сбой';
     incident?: { office: string; at: number; resumedAt?: number };
+    assistanceCost?: number;
+    failedTransport?: number;
 }
 
 export interface LedgerEntry {
@@ -70,6 +75,9 @@ export interface LedgerEntry {
     pvz: number;
     seller: number;
     saving: number;
+    comparison?: CostComparison;
+    elapsed?: number | null;
+    waiting?: number | null;
 }
 
 export interface MeshState {
