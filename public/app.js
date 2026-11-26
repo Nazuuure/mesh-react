@@ -63,7 +63,7 @@ function render(){document.body.dataset.role=role;root.innerHTML=view();$('#cloc
 async function refresh(){const r=await fetch('/api/state');if(!r.ok)throw Error('Сервер недоступен');const s=await r.json();skew=s.serverNow-Date.now()
  if(state&&s.version<state.version)return
  if(!state||s.version!==state.version||s.day!==state.day){
-   const f=document.activeElement?.closest('form[data-form="product"],form[data-form="transfer"],form[data-form="capacity"]')
+   const f=document.activeElement?.closest('form[data-form="product"],form[data-form="restock"],form[data-form="transfer"],form[data-form="capacity"]')
    const saved=f?new FormData(f):null,focus=document.activeElement?.name
    state=s;render()
    if(saved){const fresh=root.querySelector('form[data-form="'+f.dataset.form+'"]');if(fresh){for(const [k,v] of saved){if(fresh.elements[k])fresh.elements[k].value=v}fresh.elements[focus]?.focus();if(fresh.elements.l)fresh.elements.l.dispatchEvent(new Event('input',{bubbles:true}))}}

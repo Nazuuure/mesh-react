@@ -1,5 +1,17 @@
 export const categories = ['Электроника','Дом','Аксессуары']
 export const stages = ['Погрузка','В пути','Разгрузка','Завершён']
+const catalogAdditions = [
+  ['Мышь Pixel','Электроника',1290,1,'🖱️',{p1:5,p2:4,hub:10}],
+  ['Кабель Flex','Электроника',490,1,'🔌',{p2:6,p4:5,hub:12}],
+  ['Колонка Beat','Электроника',2290,3,'🔊',{p3:3,p5:3,hub:8}],
+  ['Контейнер Bento','Дом',790,2,'🍱',{p1:4,p3:4,p4:3}],
+  ['Бутылка Aqua','Дом',690,2,'💧',{p2:4,p5:4,hub:8}],
+  ['Органайзер Grid','Дом',1190,4,'🧺',{p3:3,p4:3,hub:6}],
+  ['Зонт Compact','Аксессуары',1490,2,'☂️',{p1:4,p2:4,p5:4}],
+  ['Сумка Weekender','Аксессуары',1990,4,'👜',{p3:3,p5:3,hub:6}],
+  ['Чехол Travel','Аксессуары',890,1,'🎒',{p2:5,p4:5,p5:5}]
+]
+
 export function seed(){
   const places = [
     ['hub','Распределительный хаб','Казань',0,0,100000],
@@ -17,7 +29,23 @@ export function seed(){
     ['Зарядка USB-C','Электроника',890,2,'hub','🔌'],
     ['Часы Motion','Аксессуары',1790,1,'p4','⌚']
   ].map(([name,category,price,liters,loc,icon],i)=>({id:i+1,name,category,price,liters,icon,dims:[10,10,liters*10],stock:{[loc]:12},day:0}))
-  return {places,products,orders:[],requests:[],trips:[],day:7,next:10,version:0,ledger:[],history:places.slice(1).flatMap((p,i)=>categories.map((category,j)=>({place:p.id,category,count:3+(i*7+j*11)%23})))}
+  const state={places,products,orders:[],requests:[],trips:[],day:7,next:10,version:0,ledger:[],history:places.slice(1).flatMap((p,i)=>categories.map((category,j)=>({place:p.id,category,count:3+(i*7+j*11)%23})))}
+  expandCatalog(state)
+  return state
+}
+
+export function expandCatalog(state) {
+  if (state.catalogVersion >= 1) return false
+  for (const [name,category,price,liters,icon,locations] of catalogAdditions) {
+    const stock={}
+    for (const [id,qty] of Object.entries(locations)) {
+      const available=Math.floor((space(state,id).free+1e-8)/liters)
+      if (available>0) stock[id]=Math.min(qty,available)
+    }
+    state.products.push({id:state.next++,name,category,price,liters,icon,dims:[10,10,liters*10],stock,day:state.day})
+  }
+  state.catalogVersion=1
+  return true
 }
 function check(ok,msg){if(!ok)throw Error(msg)}
 function number(v,min,max,integer=false){const n=Number(v);check(Number.isFinite(n)&&n>=min&&n<=max&&(!integer||Number.isInteger(n)),'Проверьте числовое значение');return n}
@@ -78,6 +106,13 @@ export function apply(s,a,now=Date.now()){
    check(space(s,q.id).free>=liters*qty,'Недостаточно места')
    check(Array.isArray(a.dims)&&a.dims.length===3,'Введите габариты')
    s.products.push({id:s.next++,name:a.name.trim(),category:a.category,price:number(a.price,.01,1e7),liters,dims:a.dims.map(v=>number(v,.01,1000)),stock:{[q.id]:qty},icon:'📦',day:s.day});break
+ }
+ case 'restock': {
+   check(p&&q,'Выберите товар и точку размещения')
+   const qty=number(a.qty,1,10000,true)
+   check(space(s,q.id).free+1e-8>=p.liters*qty,'Недостаточно места')
+   p.stock[q.id]=(p.stock[q.id]||0)+qty
+   break
  }
  case 'capacity':check(q&&q.id!=='hub','Выберите ПВЗ');{const v=number(a.value,0,1e6);check(v>=q.capacity-space(s,q.id).free,'Объём занят товаром или обещан входящей партии');q.capacity=v}break
  case 'transfer':{

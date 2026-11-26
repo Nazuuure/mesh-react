@@ -1,4 +1,4 @@
-import {categories,place,source} from '/model.mjs'
+import {categories,freeStock,place,source} from '/model.mjs'
 
 import {$, root, state, start, render, post, label, points, offices, hero, panel, orderRow, chips, name, rub, esc, none} from '/app.js'
 
@@ -12,9 +12,18 @@ function buyer(){
  (orders.length?panel('Мои заказы',orders.map(o=>orderRow(o)).join('')):'')+
  `<div class="head"><h2>Каталог</h2>${chips(['Все',...categories],filter,'filter')}</div><div class="grid">`+
  matches.map(p=>{
- const src=source(state,p,destination),near=src&&src.id!=='hub'&&src.city===place(state,destination).city&&Math.hypot(src.x-place(state,destination).x,src.y-place(state,destination).y)<=4
- const hint=!src?'Нет в наличии':near?'Товар рядом · '+name(src.id):src.city===place(state,destination).city&&src.id!=='hub'?'По городу · ориентир 2 часа':'Через хаб · ориентир 1–2 дня'
- return `<article class="card"><div class="art tile-${p.id>=1&&p.id<=6?p.id:'new'}"><span aria-hidden="true">${p.id>6?'📦':''}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div><button class="primary" data-action="order" data-product="${p.id}" ${src?'':'disabled'}>Заказать</button><small>${hint}</small></article>`}).join('')+(matches.length?'':none('Товары не найдены. Измените запрос или категорию.'))+'</div>'
+ const dest=place(state,destination),src=source(state,p,destination)
+ const sameCity=src&&src.id!=='hub'&&src.city===dest.city
+ const near=sameCity&&Math.hypot(src.x-dest.x,src.y-dest.y)<=4
+ let hint='Нет в наличии'
+ if(src?.id===destination)hint='Готов к выдаче · '+esc(name(src.id))
+ else if(near)hint='Товар рядом · '+esc(name(src.id))
+ else if(sameCity)hint='По городу · ориентир 2 часа'
+ else if(src?.id==='hub')hint='Через хаб · ориентир 1–2 дня'
+ else if(src)hint='Поставка из другого города · '+esc(src.city)
+ const availableOffices=offices().filter(point=>freeStock(state,p,point.id)>0)
+ const locations=availableOffices.length>1?`<small>В наличии в ПВЗ · ${availableOffices.map(point=>esc(`${point.city}, ${point.name}`)).join(' / ')}</small>`:''
+ return `<article class="card"><div class="art tile-${p.id>=1&&p.id<=6?p.id:'new'}"><span aria-hidden="true">${p.id>6?esc(p.icon || '📦'):''}</span></div><div class="cat">${p.category}</div><h3>${esc(p.name)}</h3><div class="price">${rub(p.price)}</div><button class="primary" data-action="order" data-product="${p.id}" ${src?'':'disabled'}>Заказать</button><small>${hint}</small>${locations}</article>`}).join('')+(matches.length?'':none('Товары не найдены. Измените запрос или категорию.'))+'</div>'
 }
 
 

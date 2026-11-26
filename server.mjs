@@ -1,7 +1,7 @@
 import http from 'node:http'
 import {readFile} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url'
-import {apply,seed} from './model.mjs'
+import {apply,expandCatalog,seed} from './model.mjs'
 let load,save,close
 if(process.env.DATABASE_URL){
   const {Client}=await import('pg')
@@ -18,11 +18,15 @@ if(process.env.DATABASE_URL){
   load=()=>JSON.parse(db.prepare('SELECT body FROM demo WHERE id=1').get().body)
   save=s=>db.prepare('UPDATE demo SET body=? WHERE id=1').run(JSON.stringify(s));close=()=>db.close()
 }
-const roles={buyer:['order','choice'],seller:['product','transfer'],wb:['offer','trip','viaHub','failure','ship','day','reset'],pvz:['reply','ship','receive','issue','return','capacity']}
+const roles={buyer:['order','choice'],seller:['product','restock','transfer'],wb:['offer','trip','viaHub','failure','ship','day','reset'],pvz:['reply','ship','receive','issue','return','capacity']}
 const names={buyer:'Покупатель',seller:'Продавец',wb:'Диспетчер WB',pvz:'Сотрудник ПВЗ'}
 const base=Number(process.env.PORT||8000)
 const initial=await load()
-if(!initial.clockAt){initial.clockAt=Date.now();await save(initial)}
+const catalogExpanded=expandCatalog(initial)
+const startClock=!initial.clockAt
+if(catalogExpanded)initial.version++
+if(startClock)initial.clockAt=Date.now()
+if(catalogExpanded||startClock)await save(initial)
 function tick(s){
  const days=Math.max(0,Math.floor((Date.now()-s.clockAt)/120000))
  s.day+=days;s.clockAt+=days*120000

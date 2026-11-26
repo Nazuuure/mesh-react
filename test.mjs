@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {seed,apply,space,freeStock,product} from './model.mjs'
+import {seed,apply,expandCatalog,space,freeStock,product} from './model.mjs'
 
 test('Hub order: rejection, rerouting, alternate pickup, robot failure, issue and return',()=>{
  const s=seed(),act=(type,data={})=>apply(s,{type,...data})
@@ -73,7 +73,8 @@ test('All points reject: retry after capacity changes; local shipment via hub',(
 
 test('Pickup on full mini-warehouse, parties, time and repeat receipts',()=>{
  const s=seed(),act=(type,a)=>apply(s,{type,...a},5000)
- act('capacity',{place:'p2',value:12})
+ const used=space(s,'p2').used
+ act('capacity',{place:'p2',value:used})
  act('order',{product:3,to:'p2'})
  const r=s.requests[0]
  assert.throws(()=>act('offer',{ids:[r.id],purpose:'storage',place:'p2'}))
@@ -85,7 +86,47 @@ test('Pickup on full mini-warehouse, parties, time and repeat receipts',()=>{
  assert.throws(()=>apply(s,{type:'receive',place:'p2',request:r.id},r.eta-1))
  apply(s,{type:'receive',place:'p2',request:r.id},r.eta)
  assert.throws(()=>apply(s,{type:'receive',place:'p2',request:r.id},r.eta))
- assert.deepEqual(space(s,'p2'),{used:12,held:0,pickup:8,free:0})
+ assert.deepEqual(space(s,'p2'),{used,held:0,pickup:8,free:0})
  act('issue',{order:r.order,place:'p2'})
  assert.equal(space(s,'p2').pickup,0)
+})
+
+test('Restocking one card in another point preserves stock and reserves locally',()=>{
+ const s=seed()
+ const item=product(s,1)
+ const act=(type,data)=>apply(s,{type,product:item.id,...data})
+ act('restock',{place:'p2',qty:1})
+ act('restock',{place:'p2',qty:2})
+ assert.deepEqual(item.stock,{p1:12,p2:3})
+
+ for(let i=0;i<4;i++)act('order',{to:'p2'})
+ assert.deepEqual(s.orders.map(o=>[o.loc,o.status]),[
+   ['p2','Готов к выдаче'],['p2','Готов к выдаче'],['p2','Готов к выдаче'],['p1','Предложение']
+ ])
+ assert.equal(freeStock(s,item,'p1'),11)
+ assert.equal(freeStock(s,item,'p2'),0)
+ assert.throws(()=>act('restock',{place:'p2',qty:10000}),/Недостаточно места/)
+ assert.throws(()=>act('restock',{place:'invalid',qty:1}),/Выберите товар и точку/)
+ assert.deepEqual(item.stock,{p1:12,p2:3})
+})
+
+test('Catalog expansion is repeatable without overwriting existing data or overfilling a point',()=>{
+ const s=seed()
+ assert.equal(s.products.length,15)
+ assert.ok(s.products.slice(6).every(item=>Object.keys(item.stock).length>1))
+
+ s.products=s.products.slice(0,6)
+ delete s.catalogVersion
+ apply(s,{type:'product',name:'Карточка продавца',category:'Дом',qty:1,price:299,dims:[10,10,10],place:'p1'})
+ const existing=structuredClone(s.products)
+ apply(s,{type:'order',product:s.products.at(-1).id,to:'p1'})
+ const orders=structuredClone(s.orders)
+ apply(s,{type:'capacity',place:'p2',value:space(s,'p2').used})
+ assert.equal(expandCatalog(s),true)
+ assert.deepEqual(s.products.slice(0,existing.length),existing)
+ assert.deepEqual(s.orders,orders)
+ assert.equal(space(s,'p2').free,0)
+ assert.equal(new Set(s.products.map(item=>item.id)).size,16)
+ assert.equal(expandCatalog(s),false)
+ assert.equal(s.products.length,16)
 })
