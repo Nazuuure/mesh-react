@@ -35,6 +35,7 @@ function stockLines(where){
  return state.products.filter(p=>Object.entries(p.stock).some(([id,n])=>n>0&&(!where||where===id))).map(p=>`<div class="entry"><b>${esc(p.name)}</b> <span class="muted">· ${p.dims.map(num).join(' × ')} см · ${num(p.liters)} л</span><br>${Object.entries(p.stock).filter(([id,n])=>n>0&&(!where||where===id)).map(([id,n])=>`${loc(id)}: ${freeStock(state,p,id)} свободно из ${n}`).join(' · ')}</div>`).join('')||none('Полка пока пуста')
 }
 function progress(r){
+ if(r.pausedAt!=null)return '<p>Ровер остановился · выслан курьер</p>'
  const start=r.sentAt||0,end=r.eta||0
  return '<div class="journey" data-start="'+start+'" data-end="'+end+'"><progress max="100" aria-label="Ход доставки"></progress> <span></span></div>'
 }

@@ -18,7 +18,7 @@ if(process.env.DATABASE_URL){
   load=()=>JSON.parse(db.prepare('SELECT body FROM demo WHERE id=1').get().body)
   save=s=>db.prepare('UPDATE demo SET body=? WHERE id=1').run(JSON.stringify(s));close=()=>db.close()
 }
-const roles={buyer:['order','choice'],seller:['product','restock','transfer'],wb:['offer','trip','viaHub','failure','ship','day','reset'],pvz:['reply','ship','receive','issue','return','capacity']}
+const roles={buyer:['order','choice'],seller:['product','restock','transfer'],wb:['offer','trip','viaHub','stuck','failure','ship','day','reset'],pvz:['rescue','reply','ship','receive','issue','return','capacity']}
 const names={buyer:'Покупатель',seller:'Продавец',wb:'Диспетчер WB',pvz:'Сотрудник ПВЗ'}
 const base=Number(process.env.PORT||8000)
 const initial=await load()

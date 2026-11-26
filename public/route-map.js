@@ -1,3 +1,4 @@
+import {routePosition} from '/model.mjs'
 import {esc} from '/app.js'
 
 const position = p => [60+p.x*89, 22+p.y*48]
@@ -43,7 +44,7 @@ export function routeMap(state, office) {
  const cities=[...new Set(points.filter(p=>!office||p.id===office).map(p=>p.city))]
  return '<section class="panel"><h3>Карта рейсов роверов</h3>'+cities.map(city=>{
    const local=points.filter(p=>p.city===city)
-   const trips=activeTrips(state).filter(t=>local.some(p=>p.id===t.route[0]) && (!office||t.route.includes(office)))
+   const trips=activeTrips(state).filter(t=>local.some(p=>p.id===t.route[0]) && (!office||(t.route.includes(office)||t.incident?.office===office)))
    let background='',front=''
    const rows=trips.map(trip=>{
      const requests=state.requests.filter(r=>trip.ids.includes(r.id))
@@ -55,15 +56,15 @@ export function routeMap(state, office) {
      const color=trip.robot==='R-01'?'#753aaa':'#137d77'
      const [x,y]=stops[0]
      background+=`<polyline points="${stops.map(([x,y])=>x+','+y).join(' ')}" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="8 3"/>`
-     front+=`<circle data-rover='${JSON.stringify(stops)}' cx="${x}" cy="${y}" r="8" fill="${color}" stroke="white" stroke-width="2"><title>${esc(trip.robot)}</title></circle>`
-     return `<div class="entry"><b style="color:${color}">${esc(trip.robot)} · рейс №${trip.id}</b> · ${esc(trip.status)}<br>${trip.route.map(id=>esc(points.find(p=>p.id===id).name)).join(' → ')} · ${requests.reduce((n,r)=>n+r.qty,0)} уп.</div>`
+     front+=`<circle data-paused-at="${trip.incident && trip.incident.resumedAt==null?trip.incident.at:''}" data-rover='${JSON.stringify(stops)}' cx="${x}" cy="${y}" r="8" fill="${color}" stroke="white" stroke-width="2"><title>${esc(trip.robot)}</title></circle>`
+     return `<div class="entry"><b style="color:${color}">${esc(trip.robot)} · рейс №${trip.id}</b> · ${trip.incident && trip.incident.resumedAt==null?'Застрял · курьер выслан':esc(trip.status)}<br>${trip.route.map(id=>esc(points.find(p=>p.id===id).name)).join(' → ')} · ${requests.reduce((n,r)=>n+r.qty,0)} уп.</div>`
    })
    return cityMap(local,city,{background,front},'Расчётные маршруты роверов')+(rows.length?'<small>Пунктир — маршрут, цветная точка — расчётное положение ровера.</small>'+rows.join(''):'<small>Активных рейсов нет</small>')
  }).join('')+'</section>'
 }
 
 export function roverCameras(state, office) {
- const trips=activeTrips(state).filter(t=>t.route.includes(office))
+ const trips=activeTrips(state).filter(t=>(t.route.includes(office)||t.incident?.office===office))
  return '<section class="panel"><h3>Камера ровера</h3>'+(trips.length?trips.map(t=>{
    const url=state.cameraUrls?.[t.robot]
    return `<div class="entry"><b>${esc(t.robot)} · рейс №${t.id}</b>${url?`<video class="rover-camera" controls muted playsinline preload="none" src="${esc(url)}"></video>`:'<p class="muted">Видеопоток не подключён</p>'}</div>`
@@ -73,15 +74,7 @@ export function roverCameras(state, office) {
 export function updateRovers(root, now) {
  for (const marker of root.querySelectorAll('[data-rover]')) {
    const stops = JSON.parse(marker.dataset.rover)
-   let [x,y,start] = stops[0]
-   for (const [nextX,nextY,end] of stops.slice(1)) {
-     if (!end || end <= start) break
-     const fraction = Math.min(1, Math.max(0, (now-start)/(end-start)))
-     x += (nextX-x)*fraction
-     y += (nextY-y)*fraction
-     if (fraction < 1) break
-     start = end
-   }
+   const {x,y}=routePosition(stops, Number(marker.dataset.pausedAt)||now)
    marker.setAttribute('cx', x)
    marker.setAttribute('cy', y)
  }

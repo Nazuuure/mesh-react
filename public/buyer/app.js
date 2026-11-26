@@ -37,7 +37,8 @@ function orderRow(order) {
   const delivery = status === 'В пути' ? `Товар отправлен ${origin}` : `Ожидается поставка ${origin}`
   details = `<p>${delivery} · ${pickupAddress(from)}</p>
     <p>Выбранный пункт выдачи · ${pickupAddress(to)}</p>`
-  if (request?.status === 'В пути') {
+  if (request?.pausedAt!=null) details += '<p>Ровер остановился · выслан курьер</p>'
+  else if (request?.status === 'В пути') {
    details += `<div class="journey" data-start="${request.sentAt}" data-end="${request.eta}">
      <progress max="100" aria-label="Ход доставки"></progress> <span></span>
    </div>`

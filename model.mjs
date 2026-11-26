@@ -107,6 +107,19 @@ export function packingLiters(dims){
  check(Array.isArray(dims)&&dims.length===3,'Введите три размера упаковки')
  return dims.map(v=>number(v,.01,1000)).reduce((v,n)=>v*n,1)/1000
 }
+export function routePosition(stops, now) {
+ let [x,y,start]=stops[0]
+ for(const [nextX,nextY,end] of stops.slice(1)){
+   if(!end || end<=start) break
+   const fraction=Math.min(1,Math.max(0,(now-start)/(end-start)))
+   x+=(nextX-x)*fraction
+   y+=(nextY-y)*fraction
+   if(fraction<1) break
+   start=end
+ }
+ return {x,y}
+}
+
 export function apply(s,a,now=Date.now()){
  const p=product(s,a.product),q=place(s,a.place),to=place(s,a.to)
  const o=s.orders.find(o=>o.id===Number(a.order))
@@ -159,6 +172,32 @@ export function apply(s,a,now=Date.now()){
    else{for(const r of group){r.tried.push(r.target);r.target=null;r.status='Новая'}suggest(s,group)}
    break
  }
+ case 'stuck':case 'rescue':{
+   const trip=s.trips.find(t=>t.id===Number(a.trip))
+   check(trip?.status==='В пути','Выберите активный рейс')
+   const shipments=s.requests.filter(r=>trip.ids.includes(r.id))
+   if(a.type==='stuck'){
+     check(!trip.incident,'Симуляция уже проведена для этого рейса')
+     const stops=trip.route.map((id,i)=>{
+       const point=place(s,id)
+       const time=i?shipments.find(r=>r.target===id).eta:shipments[0].sentAt
+       return [point.x,point.y,time]
+     })
+     const position=routePosition(stops,now)
+     const city=place(s,trip.route[0]).city
+     const nearest=s.places.filter(p=>p.city===city && p.id!=='hub')
+       .sort((a,b)=>distance(a,position)-distance(b,position))[0]
+     trip.incident={at:now,office:nearest.id}
+     for(const r of shipments) if(r.status==='В пути')r.pausedAt=now
+   }else{
+     const incident=trip.incident
+     check(incident && incident.office===a.place && incident.resumedAt==null,'Помощь может подтвердить назначенный ПВЗ')
+     const delay=Math.max(0,now-incident.at)
+     for(const r of shipments){r.sentAt+=delay;r.eta+=delay;delete r.pausedAt}
+     incident.resumedAt=now
+   }
+   break
+ }
  case 'ship':case 'receive':case 'failure':{
    const r=s.requests.find(r=>r.id===Number(a.request))
    const t=a.type==='failure'?s.trips.find(t=>t.id===Number(a.trip)):s.trips.find(t=>t.ids.includes(r?.id)&&!['Сбой','Завершён'].includes(t.status))
@@ -171,6 +210,7 @@ export function apply(s,a,now=Date.now()){
      for(const i of items.filter(i=>i.status!=='Доставлено')){
        if(i.departed)product(s,i.product).stock[i.from]+=i.qty
        const ord=s.orders.find(o=>o.id===i.order);if(ord)ord.status='Доставка'
+       delete i.pausedAt
        Object.assign(i,{departed:false,status:'Новая',target:null,sentAt:null,eta:null})
      }
      t.status='Сбой';break
@@ -186,6 +226,7 @@ export function apply(s,a,now=Date.now()){
      }
      if(t)t.status='В пути'
    }else{
+     check(r.pausedAt==null,'Ровер ожидает помощи курьера')
      check(r.target===a.place&&['В пути','Разгрузка'].includes(r.status)&&now>=(r.eta||0),'Приёмка доступна в пункте назначения после прибытия')
      arrive(s,r);r.receivedAt=now
      if(t&&items.every(i=>i.status==='Доставлено'))t.status='Завершён'

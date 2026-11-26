@@ -38,7 +38,7 @@ function dispatchQueue() {
 
 function arrivalQueue(inbound) {
   return inbound.filter(r => ['Погрузка', 'В пути', 'Разгрузка'].includes(r.status)).map(r => {
-    const action = r.status === 'Погрузка'
+    const action = r.pausedAt!=null ? '<small>Ровер ожидает курьера</small>' : r.status === 'Погрузка'
       ? '<small>Ожидает отправки</small>'
       : button('Подтвердить получение', 'receive', {
           request: r.id, place: office, 'ready-at': r.eta || 0
@@ -59,6 +59,9 @@ function pvz() {
 
   return hero('Рабочее место ПВЗ', 'Выдача заказов, приёмка и отправка грузов.',
     label('Работаю в пункте', `<select id="office">${points(sites, office)}</select>`)) +
+    state.trips.filter(t=>t.status==='В пути' && t.incident?.office===office && t.incident.resumedAt==null).map(t=>
+      panel('Ровер застрял',`<div role="status"><b>${t.robot} · рейс №${t.id}</b><p>Из вашего ПВЗ выслан курьер. Место остановки отмечено на карте рейсов.</p>${button('Курьер помог · продолжить рейс','rescue',{trip:t.id,place:office},true)}</div>`)
+    ).join('') +
     `<div class="cols">
       ${panel('Готовы к выдаче', ready.map(o => orderRow(o, office)).join('') || none('Заказов к выдаче нет'))}
       ${panel('Запросы на приёмку', approvalQueue(inbound) || none('Входящих запросов нет'))}
